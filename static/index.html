@@ -1,0 +1,2027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Bulk Mailer & Optimizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --surface-lt: #f1f5f9;
+            --border: #e2e8f0;
+            --border-glow: rgba(16, 185, 129, 0.25);
+            --text: #0f172a;
+            --muted: #475569;
+            --hint: #64748b;
+            --accent: #059669;
+            --accent-glow: rgba(5, 150, 105, 0.08);
+            --success: #059669;
+            --success-bg: rgba(5, 150, 105, 0.06);
+            --warn: #d97706;
+            --warn-bg: rgba(217, 119, 6, 0.06);
+            --danger: #dc2626;
+            --danger-bg: rgba(220, 38, 38, 0.06);
+            --r: 10px;
+            --rl: 16px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            font-size: 14px;
+            line-height: 1.5;
+            position: relative;
+        }
+
+        /* Subtle glowing background orbs */
+        body::before {
+            content: '';
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(5, 150, 105, 0.04) 0%, transparent 70%);
+            top: -100px;
+            right: 0;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        body::after {
+            content: '';
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.02) 0%, transparent 70%);
+            bottom: 0;
+            left: 0;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .shell {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px 20px 60px;
+        }
+
+        /* Header bar */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 28px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            width: 38px;
+            height: 38px;
+            background: var(--accent-glow);
+            border-radius: var(--r);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(5, 150, 105, 0.2);
+            box-shadow: 0 4px 10px rgba(5, 150, 105, 0.05);
+        }
+
+        .brand-icon svg {
+            fill: var(--accent);
+            width: 20px;
+            height: 20px;
+        }
+
+        .brand-name {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .brand-name span {
+            color: var(--accent);
+        }
+
+        .clock-badge {
+            font-size: 12px;
+            color: var(--muted);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 99px;
+            padding: 6px 16px;
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+        }
+
+        /* Stats Grid */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .stat {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--rl);
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+            transition: border-color 0.3s ease;
+        }
+
+        .stat:hover {
+            border-color: rgba(0, 0, 0, 0.12);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--hint);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            line-height: 1.1;
+            margin-bottom: 6px;
+        }
+
+        .stat-value.accent {
+            color: var(--accent);
+        }
+
+        .stat-value.warn {
+            color: var(--warn);
+        }
+
+        .stat-sub {
+            font-size: 12px;
+            color: var(--hint);
+        }
+
+        .prog-track {
+            height: 4px;
+            background: var(--surface-lt);
+            border-radius: 99px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+
+        .prog-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 99px;
+            width: 0%;
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Navigation Tabs */
+        .tabs {
+            display: flex;
+            gap: 6px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--rl);
+            padding: 6px;
+            margin-bottom: 24px;
+            overflow-x: auto;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+        }
+
+        .tab-btn {
+            padding: 9px 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--muted);
+            background: transparent;
+            border: none;
+            border-radius: var(--r);
+            cursor: pointer;
+            white-space: nowrap;
+            font-family: 'Outfit', sans-serif;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn:hover {
+            color: var(--text);
+            background: rgba(0, 0, 0, 0.02);
+        }
+
+        .tab-btn.active {
+            color: #ffffff;
+            background: var(--accent);
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
+        }
+
+        /* Layout & Panes */
+        .tab-pane {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--rl);
+            padding: 24px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--accent);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .grid2 {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 20px;
+        }
+
+        .grid2-equal {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        /* Forms Elements */
+        .field {
+            margin-bottom: 16px;
+        }
+
+        .field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--muted);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        select, input[type=text], input[type=password], input[type=number], input[type=file], textarea {
+            width: 100%;
+            padding: 11px 14px;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: var(--r);
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        select:focus, input:focus, textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+            background: #ffffff;
+        }
+
+        textarea {
+            height: 120px;
+            resize: vertical;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 11px 20px;
+            border: none;
+            border-radius: var(--r);
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #ffffff;
+            box-shadow: 0 4px 15px rgba(5, 150, 105, 0.2);
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background: #047857;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: #ffffff;
+            color: var(--text);
+            border: 1px solid #cbd5e1;
+        }
+
+        .btn-secondary:hover {
+            background: #f8fafc;
+            border-color: #94a3b8;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
+        }
+
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 6px;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 99px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .badge::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .badge-running {
+            background: var(--accent-glow);
+            color: var(--accent);
+            border: 1px solid rgba(5, 150, 105, 0.15);
+        }
+        .badge-running::before { background: var(--accent); }
+
+        .badge-idle {
+            background: #f1f5f9;
+            color: var(--muted);
+            border: 1px solid var(--border);
+        }
+        .badge-idle::before { background: var(--hint); }
+
+        .badge-paused {
+            background: var(--warn-bg);
+            color: var(--warn);
+            border: 1px solid rgba(217, 119, 6, 0.15);
+        }
+        .badge-paused::before { background: var(--warn); }
+
+        .badge-done {
+            background: rgba(99, 102, 241, 0.08);
+            color: #4f46e5;
+            border: 1px solid rgba(99, 102, 241, 0.15);
+        }
+        .badge-done::before { background: #6366f1; }
+
+        /* Rules Table */
+        .rules-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .rules-table tr {
+            border-bottom: 1px solid var(--border);
+        }
+
+        .rules-table tr:last-child {
+            border-bottom: none;
+        }
+
+        .rules-table td {
+            padding: 12px 0;
+        }
+
+        .rules-table td:first-child {
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        .rules-table td:last-child {
+            text-align: right;
+            font-weight: 600;
+        }
+
+        /* Log Box (Clean slate-light console in light theme) */
+        .log-box {
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: var(--r);
+            padding: 14px 18px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 12px;
+            line-height: 1.8;
+            color: #334155;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+        }
+
+        .log-ok { color: #047857; font-weight: 600; }
+        .log-err { color: #b91c1c; font-weight: 600; }
+        .log-warn { color: #b45309; font-weight: 600; }
+
+        /* Senders list in monitor */
+        .monitor-senders-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 320px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .monitor-sender-card {
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: var(--r);
+            padding: 14px 16px;
+        }
+
+        .monitor-sender-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .monitor-sender-title {
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .monitor-sender-meta {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 6px;
+        }
+
+        /* Deliverability Optimization Section */
+        .opt-score-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: var(--r);
+            padding: 16px 20px;
+            margin-bottom: 20px;
+        }
+
+        .opt-score-radial {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: conic-gradient(var(--accent) 0deg, var(--surface-lt) 0deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .opt-score-radial::after {
+            content: '';
+            position: absolute;
+            width: 66px;
+            height: 66px;
+            border-radius: 50%;
+            background: var(--surface);
+        }
+
+        .opt-score-val {
+            position: relative;
+            z-index: 2;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .opt-classification {
+            flex-grow: 1;
+        }
+
+        .opt-classification-title {
+            font-size: 12px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .opt-classification-value {
+            font-size: 20px;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        .opt-classification-value.primary { color: var(--accent); }
+        .opt-classification-value.promotions { color: var(--warn); }
+        .opt-classification-value.spam { color: var(--danger); }
+
+        .opt-suggestions-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .opt-suggestion-card {
+            border-radius: var(--r);
+            padding: 12px 14px;
+            border: 1px solid transparent;
+            font-size: 13px;
+        }
+
+        .opt-suggestion-card.warning {
+            background: #fef2f2;
+            border-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        .opt-suggestion-card.suggestion {
+            background: #fffbeb;
+            border-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .opt-suggestion-card.info {
+            background: #eff6ff;
+            border-color: #dbeafe;
+            color: #1e40af;
+        }
+
+        .opt-suggestion-msg {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .opt-suggestion-rec {
+            font-size: 12px;
+            color: #475569;
+        }
+
+        /* Settings Grid Layout */
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .sender-item-card {
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: var(--r);
+            padding: 16px;
+            margin-bottom: 12px;
+            position: relative;
+            transition: border-color 0.2s ease;
+        }
+
+        .sender-item-card:hover {
+            border-color: #94a3b8;
+        }
+
+        .sender-item-title {
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 4px;
+        }
+
+        .sender-item-subtitle {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .sender-item-meta {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px;
+            font-size: 11px;
+            color: var(--hint);
+        }
+
+        .sender-item-actions {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            gap: 6px;
+        }
+
+        /* Mapping Checklist Grid */
+        .mapping-checklist {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: var(--r);
+            padding: 12px;
+            background: #f8fafc;
+        }
+
+        .mapping-checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .mapping-checkbox-item:hover {
+            background: #f1f5f9;
+        }
+
+        .mapping-checkbox-item input {
+            cursor: pointer;
+            accent-color: var(--accent);
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Tables */
+        table.track-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        table.track-table th {
+            text-align: left;
+            padding: 10px;
+            color: var(--muted);
+            border-bottom: 2px solid var(--border);
+            font-weight: 600;
+        }
+
+        table.track-table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        table.track-table tr:hover td {
+            background: #f8fafc;
+        }
+
+        .reply-preview-row td {
+            padding-top: 0px !important;
+            padding-bottom: 12px !important;
+        }
+
+        .reply-preview-container {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-left: 10px;
+            color: #166534;
+            font-size: 12px;
+        }
+
+        .step-badge {
+            display: inline-block;
+            background: var(--accent-glow);
+            color: var(--accent);
+            border: 1px solid rgba(5, 150, 105, 0.15);
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            text-align: center;
+            line-height: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            margin-right: 8px;
+        }
+
+        .info-box {
+            background: rgba(5, 150, 105, 0.05);
+            border: 1px solid rgba(5, 150, 105, 0.15);
+            border-radius: var(--r);
+            padding: 12px 16px;
+            font-size: 12px;
+            color: #065f46;
+            margin-bottom: 16px;
+        }
+
+        .gmail-note {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: var(--r);
+            padding: 12px 16px;
+            font-size: 12px;
+            color: #991b1b;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 99px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        @media (max-width: 850px) {
+            .stats, .grid2, .grid2-equal, .settings-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <div class="topbar">
+            <div class="brand">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/>
+                    </svg>
+                </div>
+                <span class="brand-name">VSD Finserv <span>Mailer & Optimizer</span></span>
+            </div>
+            <span class="clock-badge" id="clock">—</span>
+        </div>
+
+        <!-- Global Statistics -->
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-label">Sent Today</div>
+                <div class="stat-value accent" id="stat-sent">—</div>
+                <div class="stat-sub">of daily limit</div>
+                <div class="prog-track">
+                    <div class="prog-fill" id="stat-prog" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Remaining</div>
+                <div class="stat-value" id="stat-rem">—</div>
+                <div class="stat-sub">emails today</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Daily Limit</div>
+                <div class="stat-value" id="stat-limit">1500</div>
+                <div class="stat-sub">shared limit</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">System Status</div>
+                <div style="margin-top: 8px;" id="stat-status">
+                    <span class="badge badge-idle">Idle</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('launch', this)">Launch Campaign</button>
+            <button class="tab-btn" onclick="switchTab('templates', this)">Templates</button>
+            <button class="tab-btn" onclick="switchTab('draft', this)">Draft Preview</button>
+            <button class="tab-btn" onclick="switchTab('monitor', this)">Live Monitor</button>
+            <button class="tab-btn" onclick="switchTab('tracking', this)">Email Tracking</button>
+            <button class="tab-btn" onclick="switchTab('settings', this)">Settings Panel</button>
+        </div>
+
+        <!-- ── TAB 1: LAUNCH CAMPAIGN ────────────────────────────────────────── -->
+        <div class="tab-pane active" id="tab-launch">
+            <div class="grid2">
+                <div class="card">
+                    <div class="card-title">New Campaign</div>
+                    <div class="info-box">Upload any Excel list. Columns like 'Email', 'Owner Name', and 'Company Name' are detected automatically.</div>
+                    <div class="gmail-note" id="gmail-warning">This account will send via direct Gmail SMTP credentials. Please ensure Gmail App Password is configured.</div>
+                    
+                    <form action="/send-emails/" method="post" enctype="multipart/form-data" onsubmit="return confirm('Launch campaign?')">
+                        <div class="field">
+                            <label>Sender Account</label>
+                            <select name="sender_email" id="launch-sender" required onchange="filterTemplatesBySender()"></select>
+                        </div>
+                        <div class="field">
+                            <label>Template Category</label>
+                            <select name="category" id="launch-category" required></select>
+                        </div>
+                        <div class="field">
+                            <label>Excel File (.xlsx)</label>
+                            <input type="file" name="file" accept=".xlsx,.xls" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="margin-top: 10px;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                            Start Bulk Campaign
+                        </button>
+                    </form>
+                </div>
+                <div class="card">
+                    <div class="card-title">Campaign Rules</div>
+                    <table class="rules-table">
+                        <tr><td>Working Hours</td><td>10:00 AM – 07:00 PM IST</td></tr>
+                        <tr><td>Send Delay</td><td>60–120s between emails</td></tr>
+                        <tr><td>Auto-Resume</td><td>Next day 10 AM if limit reached</td></tr>
+                        <tr><td>Format Checking</td><td>Deliverability rules checked on Template tab</td></tr>
+                        <tr><td>Diagnostics</td><td>
+                            <a href="/diagnose-gmail" target="_blank" style="color:var(--accent); font-weight:600; text-decoration:none;">Diagnose Network Ports</a>
+                        </td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── TAB 2: TEMPLATES & ANALYZER ───────────────────────────────────── -->
+        <div class="tab-pane" id="tab-templates">
+            <div class="grid2">
+                <div class="card">
+                    <div class="card-title">Add / Update Template</div>
+                    <div class="field">
+                        <label>Associate with Sender (Optional)</label>
+                        <select id="tmpl-sender-assoc"></select>
+                    </div>
+                    <div class="field">
+                        <label>Template Category Name</label>
+                        <input type="text" id="tmpl-cat" placeholder="e.g. Subsidy Incentives" oninput="toggleTemplateDetails()">
+                    </div>
+                    <div id="tmpl-details-section" style="display: none;">
+                        <div class="field">
+                            <label>Subject Line</label>
+                            <input type="text" id="tmpl-subject" placeholder="Email subject line..." oninput="queueAnalysis()">
+                        </div>
+                        <div class="field">
+                            <label>Email Body (Plain Text)</label>
+                            <textarea id="tmpl-body" placeholder="Dear {Owner Name}, from {Company Name}..." oninput="queueAnalysis()"></textarea>
+                        </div>
+                        <div style="display:flex; gap:10px;">
+                            <button class="btn btn-primary" onclick="saveTemplate()" style="flex-grow:1;">Save Template</button>
+                            <button class="btn btn-secondary" onclick="deleteTemplate()" id="btn-tmpl-delete" style="display:none; color:var(--danger);">Delete</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Deliverability Suggestions Panel -->
+                <div class="card">
+                    <div class="card-title">Deliverability Suggestions</div>
+                    <div class="opt-score-container">
+                        <div class="opt-score-radial" id="opt-score-ring">
+                            <span class="opt-score-val" id="opt-score-txt">—</span>
+                        </div>
+                        <div class="opt-classification">
+                            <div class="opt-classification-title">Predicted Category</div>
+                            <div class="opt-classification-value promotions" id="opt-class-txt">Promotions</div>
+                        </div>
+                    </div>
+                    <div class="opt-suggestions-list" id="opt-suggestions">
+                        <div style="color:var(--muted); font-size:13px; text-align:center; padding:20px;">
+                            Start entering subject & body to view suggestions.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">Saved Templates</div>
+                <div id="templates-list-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:14px;">
+                    <!-- Filled dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ── TAB 3: DRAFT PREVIEW ────────────────────────────────────────── -->
+        <div class="tab-pane" id="tab-draft">
+            <div class="grid2">
+                <div class="card">
+                    <div class="card-title">Select Template & Variables</div>
+                    <div class="field">
+                        <label>Template</label>
+                        <select id="draft-template" onchange="loadDraftPreview()"></select>
+                    </div>
+                    <div class="field">
+                        <label>Test Variables (JSON format)</label>
+                        <textarea id="draft-variables" placeholder='{
+  "Owner Name": "Jenil Koshti",
+  "Company Name": "ABC Textiles Ltd",
+  "Location": "Ahmedabad",
+  "Business Type": "textile manufacturing"
+}' style="height: 140px;" oninput="previewDraft()"></textarea>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Visual Email Preview</div>
+                    <div style="margin-bottom: 12px; padding: 10px 14px; background:var(--surface-lt); border-radius:var(--r); border:1px solid var(--border);">
+                        <span style="color:var(--muted); font-size:12px; font-weight:600; text-transform:uppercase;">Subject:</span>
+                        <span id="prev-subject-line" style="font-weight:600; margin-left: 8px; color:var(--accent);">—</span>
+                    </div>
+                    <div style="background:white; color:#333; padding:20px; border-radius:var(--r); min-height: 250px; overflow-y:auto; font-family:Arial,sans-serif; border:1px solid var(--border);" id="prev-body-box">
+                        Select a template to view preview.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── TAB 4: LIVE MONITOR ─────────────────────────────────────────── -->
+        <div class="tab-pane" id="tab-monitor">
+            <div class="grid2">
+                <div class="card">
+                    <div class="card-title">Active Bulk Runs</div>
+                    <div class="monitor-senders-list" id="monitor-campaigns-list">
+                        <div style="color:var(--muted); font-size:13px;">No active runs.</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Real-time Activity Log</div>
+                    <div class="log-box" id="monitor-logs">Waiting for log updates...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── TAB 5: EMAIL TRACKING & REPLIES ─────────────────────────────── -->
+        <div class="tab-pane" id="tab-tracking">
+            <div class="card">
+                <div class="card-title">Campaign Performance Tracking</div>
+
+                <!-- Tracking URL Setup Notice -->
+                <div class="info-box" id="tracking-url-warning" style="display:none; background-color:#fffbeb; border-color:#fef3c7; color:#b45309; margin-bottom:15px; font-size:13px; line-height:1.5;">
+                    ⚠️ <strong>Tracking Configuration Warning:</strong> Your Tracking Base URL is either empty or configured with a local/non-secure address. To track email opens from external recipients, you must configure a public HTTPS URL (e.g., an <code>ngrok</code> tunnel or public domain) in the Settings tab.
+                </div>
+                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-bottom: 20px;">
+                    <div style="background: rgba(5, 150, 105, 0.05); border:1px solid rgba(5, 150, 105, 0.15); border-radius:var(--r); padding:16px; text-align:center;">
+                        <div style="font-size:24px; font-weight:700; color:var(--accent);" id="tr-total">—</div>
+                        <div style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; margin-top:4px;">Total Sent</div>
+                    </div>
+                    <div style="background: rgba(59, 130, 246, 0.05); border:1px solid rgba(59, 130, 246, 0.15); border-radius:var(--r); padding:16px; text-align:center;">
+                        <div style="font-size:24px; font-weight:700; color:#2563eb;" id="tr-opened">—</div>
+                        <div style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; margin-top:4px;">Opened</div>
+                    </div>
+                    <div style="background: rgba(5, 150, 105, 0.08); border:1px solid rgba(5, 150, 105, 0.2); border-radius:var(--r); padding:16px; text-align:center;">
+                        <div style="font-size:24px; font-weight:700; color:var(--accent);" id="tr-replied">—</div>
+                        <div style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; margin-top:4px;">Replied</div>
+                    </div>
+                    <div style="background: rgba(220, 38, 38, 0.05); border:1px solid rgba(220, 38, 38, 0.15); border-radius:var(--r); padding:16px; text-align:center;">
+                        <div style="font-size:24px; font-weight:700; color:var(--danger);" id="tr-48h">—</div>
+                        <div style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; margin-top:4px;">Not Opened 48h</div>
+                    </div>
+                </div>
+                
+                <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 16px; flex-wrap:wrap; gap:10px;">
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn btn-secondary btn-sm" onclick="loadTracking('all')">All</button>
+                        <button class="btn btn-secondary btn-sm" onclick="loadTracking('opened')">Opened</button>
+                        <button class="btn btn-secondary btn-sm" onclick="loadTracking('replied')">Replied</button>
+                        <button class="btn btn-secondary btn-sm" onclick="loadTracking('not_opened')">Not Opened</button>
+                        <button class="btn btn-secondary btn-sm" onclick="loadTracking('alert_48h')">48h Alert</button>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="refreshTracking()">Refresh</button>
+                </div>
+                
+                <div style="overflow-x:auto;">
+                    <table class="track-table">
+                        <thead>
+                            <tr>
+                                <th>Recipient</th>
+                                <th>Company</th>
+                                <th>Sender Account</th>
+                                <th>Sent Date</th>
+                                <th style="text-align:center;">Status</th>
+                                <th style="text-align:center;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tracking-table-body">
+                            <!-- Filled dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── TAB 6: SETTINGS PANEL ────────────────────────────────────────── -->
+        <div class="tab-pane" id="tab-settings">
+            <div class="settings-grid">
+                <!-- Manage Senders List & Form -->
+                <div>
+                    <div class="card">
+                        <div class="card-title">Sender Accounts</div>
+                        <div id="settings-senders-list" style="max-height: 400px; overflow-y:auto; padding-right:4px;">
+                            <!-- Filled dynamically -->
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title" id="sender-form-title">Add Sender Account</div>
+                        <input type="hidden" id="snd-is-edit" value="false">
+                        
+                        <div class="field">
+                            <label>Email Address</label>
+                            <input type="text" id="snd-email" placeholder="e.g. admin@mybankloan.ai">
+                        </div>
+                        <div class="field">
+                            <label>Display Sender Name</label>
+                            <input type="text" id="snd-display-name" placeholder="e.g. VSD Finserv Pvt. Ltd.">
+                        </div>
+                        <div class="field">
+                            <label>Provider Type</label>
+                            <select id="snd-provider" onchange="toggleProviderSettings()">
+                                <option value="brevo">Brevo Transactional API</option>
+                                <option value="smtp">Custom SMTP Server / Gmail</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Brevo API key field -->
+                        <div class="field" id="snd-brevo-block">
+                            <label>Brevo API Key</label>
+                            <input type="password" id="snd-api-key" placeholder="xkeysib-...">
+                        </div>
+                        
+                        <!-- Custom SMTP fields -->
+                        <div id="snd-smtp-block" style="display:none;">
+                            <div class="grid2-equal" style="gap:10px;">
+                                <div class="field">
+                                    <label>SMTP Host</label>
+                                    <input type="text" id="snd-smtp-host" placeholder="smtp.gmail.com">
+                                </div>
+                                <div class="field">
+                                    <label>SMTP Port</label>
+                                    <input type="number" id="snd-smtp-port" placeholder="587">
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label>SMTP Password (App Password)</label>
+                                <input type="password" id="snd-smtp-pass" placeholder="••••••••••••••••">
+                            </div>
+                        </div>
+                        
+                        <!-- IMAP Incoming Settings (Required for Reply Tracking) -->
+                        <div class="card-title" style="font-size:12px; margin-top:20px; border-bottom:1px solid var(--border); padding-bottom:8px;">Incoming Poller (IMAP Settings for replies)</div>
+                        <div class="grid2-equal" style="gap:10px;">
+                            <div class="field">
+                                <label>IMAP Host</label>
+                                <input type="text" id="snd-imap-host" placeholder="imap.gmail.com">
+                            </div>
+                            <div class="field">
+                                <label>IMAP Port</label>
+                                <input type="number" id="snd-imap-port" placeholder="993">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label>IMAP Password</label>
+                            <input type="password" id="snd-imap-pass" placeholder="••••••••••••••••">
+                        </div>
+                        
+                        <!-- Limits and Active -->
+                        <div class="grid2-equal" style="gap:10px; align-items:center;">
+                            <div class="field">
+                                <label>Daily Email Limit</label>
+                                <input type="number" id="snd-limit" value="1500">
+                            </div>
+                            <div class="field" style="display:flex; align-items:center; gap:10px; margin-top:16px;">
+                                <input type="checkbox" id="snd-active" checked style="width:18px; height:18px; accent-color:var(--accent);">
+                                <label for="snd-active" style="margin-bottom:0; cursor:pointer;">Account Active</label>
+                            </div>
+                        </div>
+                        
+                        <!-- Delay settings (seconds) -->
+                        <div class="grid2-equal" style="gap:10px; margin-top:10px;">
+                            <div class="field">
+                                <label>Min Delay between emails (sec)</label>
+                                <input type="number" id="snd-delay-min" value="60">
+                            </div>
+                            <div class="field">
+                                <label>Max Delay between emails (sec)</label>
+                                <input type="number" id="snd-delay-max" value="120">
+                            </div>
+                        </div>
+                        
+                        <div style="display:flex; gap:10px; margin-top:10px;">
+                            <button class="btn btn-primary" onclick="saveSenderAccount()">Save Sender</button>
+                            <button class="btn btn-secondary" onclick="resetSenderForm()" id="btn-cancel-edit" style="display:none;">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Map Senders to Templates -->
+                <div>
+                    <div class="card">
+                        <div class="card-title">Template Sender Mapping</div>
+                        <div class="info-box">Select a sender account, then check which template categories this sender email is allowed to send. Mappings update automatically.</div>
+                        <div class="field">
+                            <label>Choose Sender Account</label>
+                            <select id="map-sender-select" onchange="loadSenderTemplateMappings()"></select>
+                        </div>
+                        <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:8px; text-transform:uppercase;">Mapped Templates</label>
+                        <div class="mapping-checklist" id="map-templates-checklist">
+                            <!-- Filled dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Global Settings -->
+                    <div class="card" style="margin-top: 20px;">
+                        <div class="card-title">Global Settings</div>
+                        <div class="info-box">Configure the tracking base URL (used to rewrite the tracking pixel image links for remote computers) and the system access password.</div>
+                        <div class="field">
+                            <label>Tracking Base URL</label>
+                            <input type="text" id="setting-tracking-url" placeholder="e.g. https://xyz.ngrok-free.app">
+                        </div>
+                        <div class="field">
+                            <label>System Password</label>
+                            <input type="password" id="setting-password" placeholder="System access password">
+                        </div>
+                        <div style="margin-top: 10px;">
+                            <button class="btn btn-primary" onclick="saveGlobalSettings()">Save Settings</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Set client local time clock
+        function updateClock() {
+            var n = new Date().toLocaleString('en-IN', {
+                timeZone: 'Asia/Kolkata',
+                hour12: true,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short'
+            });
+            document.getElementById('clock').textContent = n + ' IST';
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Global Variable holds
+        let sendersList = [];
+        let templatesList = [];
+        let activeCampaigns = {};
+        let currentFilter = 'all';
+        let analysisTimeout = null;
+
+        // Fetch Password from Query or LocalStorage
+        function getPwd() {
+            const urlParams = new URLSearchParams(window.location.search);
+            let pwd = urlParams.get('pwd') || localStorage.getItem("mailer_password");
+            if (!pwd) pwd = 'admin@123'; // Default fallback
+            return pwd;
+        }
+
+        // Tab Switcher
+        function switchTab(tabName, btnEl) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            
+            document.getElementById('tab-' + tabName).classList.add('active');
+            btnEl.classList.add('active');
+
+            if (tabName === 'templates') {
+                loadTemplates();
+            } else if (tabName === 'draft') {
+                loadDraftSelect();
+            } else if (tabName === 'tracking') {
+                loadTracking('all');
+                loadGlobalSettings();
+            } else if (tabName === 'settings') {
+                loadSettingsData();
+            }
+        }
+
+        // ── LAUNCH CAMPAIGN & INITIAL DATA LOADING ────────────────────────────────
+        async function initData() {
+            await loadSenders();
+            filterTemplatesBySender();
+            startPolling();
+        }
+
+        async function loadSenders() {
+            try {
+                const response = await fetch('/api/senders');
+                sendersList = await response.json();
+                
+                // Populate selects
+                const launchSel = document.getElementById('launch-sender');
+                const assocSel = document.getElementById('tmpl-sender-assoc');
+                const mapSel = document.getElementById('map-sender-select');
+                
+                let opts = sendersList.map(s => `<option value="${s.email}">${s.display_name} &lt;${s.email}&gt;</option>`).join('');
+                if (!opts) opts = `<option value="">No senders configured</option>`;
+                
+                launchSel.innerHTML = opts;
+                assocSel.innerHTML = `<option value="">Generic (All Senders)</option>` + opts;
+                mapSel.innerHTML = opts;
+                
+                // Warn about Gmail
+                checkGmailWarning();
+            } catch (err) {
+                console.error("Error loading senders:", err);
+            }
+        }
+
+        function checkGmailWarning() {
+            const email = document.getElementById('launch-sender').value;
+            const warningBox = document.getElementById('gmail-warning');
+            if (email && (email.includes('gmail.com') || email.includes('googlemail.com'))) {
+                warningBox.style.display = 'block';
+            } else {
+                warningBox.style.display = 'none';
+            }
+        }
+
+        async function filterTemplatesBySender() {
+            const sender = document.getElementById('launch-sender').value;
+            const categorySelect = document.getElementById('launch-category');
+            checkGmailWarning();
+            
+            try {
+                const response = await fetch(`/templates-by-sender?sender=${encodeURIComponent(sender)}`);
+                const data = await response.json();
+                
+                let opts = data.map(t => `<option value="${t.category}">${t.category}</option>`).join('');
+                if (!opts) opts = `<option value="">No templates mapped to this sender</option>`;
+                categorySelect.innerHTML = opts;
+            } catch (err) {
+                console.error("Error filtering templates:", err);
+            }
+        }
+
+        // ── LIVE MONITORING & LOGS POLLER ──────────────────────────────────────────
+        let pollInterval = null;
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(fetchStatus, 3000);
+            fetchStatus();
+        }
+
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                
+                // Update header stats
+                document.getElementById('stat-sent').textContent = data.sent_today;
+                document.getElementById('stat-rem').textContent = Math.max(0, 1500 - data.sent_today);
+                const pct = Math.min(100, Math.round((data.sent_today / 1500) * 100));
+                document.getElementById('stat-prog').style.width = pct + '%';
+                
+                // Update active campaigns list in monitor
+                const campaignsList = document.getElementById('monitor-campaigns-list');
+                const senders = data.senders || {};
+                
+                let anyRunning = false;
+                let anyPaused = false;
+                let html = '';
+                
+                for (const [email, campaignList] of Object.entries(senders)) {
+                    campaignList.forEach(st => {
+                        const progPct = st.total_rows > 0 ? Math.min(100, Math.round((st.current_row / st.total_rows) * 100)) : 0;
+                        let badge = '';
+                        if (st.running && !st.paused) {
+                            badge = '<span class="badge badge-running">Running</span>';
+                            anyRunning = true;
+                        } else if (st.paused) {
+                            badge = '<span class="badge badge-paused">Paused</span>';
+                            anyPaused = true;
+                        } else {
+                            badge = '<span class="badge badge-done">Done</span>';
+                        }
+                        
+                        let cancelBtn = '';
+                        if (st.running || st.paused) {
+                            cancelBtn = `<button class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size:11px; margin-left: 10px; border-radius: 4px; display: inline-flex;" onclick="cancelCampaign('${st.campaign_id}')">Cancel</button>`;
+                        }
+                        
+                        html += `
+                        <div class="monitor-sender-card">
+                            <div class="monitor-sender-header">
+                                <span class="monitor-sender-title">${email} (${st.category || 'No Category'})</span>
+                                <div style="display:flex; align-items:center;">
+                                    ${badge}
+                                    ${cancelBtn}
+                                </div>
+                            </div>
+                            <div class="prog-track">
+                                <div class="prog-fill" style="width: ${progPct}%"></div>
+                            </div>
+                            <div class="monitor-sender-meta">
+                                ${st.current_row} of ${st.total_rows} sent (${progPct}%) • Started: ${st.started_at || ''}
+                            </div>
+                        </div>`;
+                    });
+                }
+                
+                campaignsList.innerHTML = html || `<div style="color:var(--muted); font-size:13px;">No active campaigns.</div>`;
+                
+                // System Status Badge
+                const statusBadgeContainer = document.getElementById('stat-status');
+                if (anyRunning) {
+                    statusBadgeContainer.innerHTML = '<span class="badge badge-running">Running</span>';
+                } else if (anyPaused) {
+                    statusBadgeContainer.innerHTML = '<span class="badge badge-paused">Paused</span>';
+                } else {
+                    statusBadgeContainer.innerHTML = '<span class="badge badge-idle">Idle</span>';
+                }
+                
+                // Logs
+                const logsBox = document.getElementById('monitor-logs');
+                if (logsBox) {
+                    const logsHtml = data.log.map(line => {
+                        if (line.includes('OK')) return `<div class="log-ok">${line}</div>`;
+                        if (line.includes('FAIL') || line.includes('ERROR')) return `<div class="log-err">${line}</div>`;
+                        if (line.includes('Paused') || line.includes('limit') || line.includes('Outside')) return `<div class="log-warn">${line}</div>`;
+                        return `<div>${line}</div>`;
+                    }).join('');
+                    logsBox.innerHTML = logsHtml || 'No activity.';
+                    logsBox.scrollTop = logsBox.scrollHeight;
+                }
+            } catch (err) {
+                console.error("Poller error:", err);
+            }
+        }
+
+        async function cancelCampaign(campaignId) {
+            if (!confirm("Are you sure you want to cancel this campaign?")) return;
+            try {
+                const response = await fetch('/api/campaigns/cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ campaign_id: campaignId })
+                });
+                const res = await response.json();
+                if (res.ok) {
+                    alert("Campaign cancellation requested.");
+                    fetchStatus();
+                } else {
+                    alert("Error: " + res.error);
+                }
+            } catch (err) {
+                alert("Connection error: " + err);
+            }
+        }
+
+        // ── TEMPLATE MANAGEMENT & ANALYZER ─────────────────────────────────────────
+        async function loadTemplates() {
+            try {
+                const response = await fetch('/templates-list-full');
+                templatesList = await response.json();
+                
+                const container = document.getElementById('templates-list-container');
+                container.innerHTML = templatesList.map(t => `
+                    <div class="sender-item-card" style="cursor:pointer;" onclick="editTemplate('${t.category}')">
+                        <div class="sender-item-title">${t.category}</div>
+                        <div class="sender-item-subtitle" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width:240px;">Subject: ${t.subject}</div>
+                        <div class="sender-item-meta">
+                            <span>Senders: ${t.senders || 'All Senders'}</span>
+                        </div>
+                    </div>
+                `).join('') || `<div style="color:var(--muted); font-size:13px; grid-column: 1/-1; text-align:center;">No templates configured. Create one above!</div>`;
+            } catch (err) {
+                console.error("Error loading templates:", err);
+            }
+        }
+
+        function editTemplate(category) {
+            const tmpl = templatesList.find(t => t.category === category);
+            if (!tmpl) return;
+            
+            document.getElementById('tmpl-cat').value = tmpl.category;
+            document.getElementById('tmpl-cat').readOnly = true; // Cannot rename category to prevent conflicts
+            document.getElementById('tmpl-subject').value = tmpl.subject;
+            document.getElementById('tmpl-body').value = tmpl.body_text;
+            
+            document.getElementById('tmpl-details-section').style.display = 'block';
+            document.getElementById('btn-tmpl-delete').style.display = 'block';
+            
+            // Trigger analysis
+            analyzeTemplateContent(tmpl.subject, tmpl.body_text);
+        }
+
+        function toggleTemplateDetails() {
+            const cat = document.getElementById('tmpl-cat').value.trim();
+            const details = document.getElementById('tmpl-details-section');
+            if (cat) {
+                details.style.display = 'block';
+            } else {
+                details.style.display = 'none';
+            }
+        }
+
+        // Real-time deliverability suggestions poller (debounce inputs)
+        function queueAnalysis() {
+            if (analysisTimeout) clearTimeout(analysisTimeout);
+            analysisTimeout = setTimeout(() => {
+                const subj = document.getElementById('tmpl-subject').value;
+                const body = document.getElementById('tmpl-body').value;
+                analyzeTemplateContent(subj, body);
+            }, 500); // 500ms debounce
+        }
+
+        async function analyzeTemplateContent(subject, body_text) {
+            if (!subject && !body_text) return;
+            
+            try {
+                const response = await fetch('/api/analyze-template', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ subject, body_text })
+                });
+                
+                const data = await response.json();
+                
+                // Update score ring & class
+                const ring = document.getElementById('opt-score-ring');
+                const text = document.getElementById('opt-score-txt');
+                const classTxt = document.getElementById('opt-class-txt');
+                
+                text.textContent = data.score;
+                classTxt.textContent = data.classification;
+                classTxt.className = 'opt-classification-value ' + data.classification.toLowerCase();
+                
+                // Conic gradient color mapping
+                let ringColor = 'var(--accent)';
+                if (data.score < 55) {
+                    ringColor = 'var(--danger)';
+                } else if (data.score < 85) {
+                    ringColor = 'var(--warn)';
+                }
+                
+                const angle = (data.score / 100) * 360;
+                ring.style.background = `conic-gradient(${ringColor} ${angle}deg, rgba(255, 255, 255, 0.05) ${angle}deg)`;
+                
+                // Suggestions
+                const list = document.getElementById('opt-suggestions');
+                if (data.suggestions.length === 0) {
+                    list.innerHTML = `
+                    <div style="background:var(--success-bg); color:var(--success); border:1px solid rgba(16,185,129,0.15); border-radius:var(--r); padding:14px; text-align:center;">
+                        ✓ Clean deliverability score! This email has high chance of landing in the <b>Primary Inbox</b>.
+                    </div>`;
+                } else {
+                    list.innerHTML = data.suggestions.map(s => `
+                        <div class="opt-suggestion-card ${s.type}">
+                            <div class="opt-suggestion-msg">${s.message}</div>
+                            <div class="opt-suggestion-rec">${s.recommendation}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error("Error analyzing template:", err);
+            }
+        }
+
+        async function saveTemplate() {
+            const sender = document.getElementById('tmpl-sender-assoc').value;
+            const cat = document.getElementById('tmpl-cat').value.trim();
+            const subj = document.getElementById('tmpl-subject').value.trim();
+            const body = document.getElementById('tmpl-body').value.trim();
+            
+            if (!cat || !subj || !body) {
+                alert('Please enter template name, subject, and body.');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/add-template-ajax/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sender_email: sender, category: cat, subject: subj, body_text: body })
+                });
+                const res = await response.json();
+                
+                if (res.ok) {
+                    alert('Template saved successfully!');
+                    resetTemplateForm();
+                    loadTemplates();
+                } else {
+                    alert('Error saving template: ' + res.error);
+                }
+            } catch (err) {
+                alert('Connection error: ' + err);
+            }
+        }
+
+        async function deleteTemplate() {
+            const cat = document.getElementById('tmpl-cat').value.trim();
+            if (!cat) return;
+            
+            if (!confirm(`Are you sure you want to delete template "${cat}"?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/delete-template', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category: cat })
+                });
+                const res = await response.json();
+                
+                if (res.ok) {
+                    alert('Template deleted.');
+                    resetTemplateForm();
+                    loadTemplates();
+                } else {
+                    alert('Error deleting template.');
+                }
+            } catch (err) {
+                alert('Connection error: ' + err);
+            }
+        }
+
+        function resetTemplateForm() {
+            document.getElementById('tmpl-cat').value = '';
+            document.getElementById('tmpl-cat').readOnly = false;
+            document.getElementById('tmpl-subject').value = '';
+            document.getElementById('tmpl-body').value = '';
+            
+            document.getElementById('tmpl-details-section').style.display = 'none';
+            document.getElementById('btn-tmpl-delete').style.display = 'none';
+            
+            document.getElementById('opt-score-ring').style.background = `conic-gradient(rgba(255, 255, 255, 0.05) 0deg, rgba(255, 255, 255, 0.05) 0deg)`;
+            document.getElementById('opt-score-txt').textContent = '—';
+            document.getElementById('opt-class-txt').textContent = '—';
+            document.getElementById('opt-class-txt').className = 'opt-classification-value';
+            document.getElementById('opt-suggestions').innerHTML = `<div style="color:var(--muted); font-size:13px; text-align:center; padding:20px;">Start entering subject & body to view suggestions.</div>`;
+        }
+
+        // ── TAB 3: DRAFT PREVIEW ───────────────────────────────────────────
+        function loadDraftSelect() {
+            const select = document.getElementById('draft-template');
+            select.innerHTML = templatesList.map(t => `<option value="${t.category}">${t.category}</option>`).join('');
+            loadDraftPreview();
+        }
+
+        async function loadDraftPreview() {
+            const cat = document.getElementById('draft-template').value;
+            if (!cat) return;
+            
+            try {
+                const response = await fetch(`/get-template?category=${encodeURIComponent(cat)}`);
+                const data = await response.json();
+                
+                document.getElementById('prev-subject-line').textContent = data.subject || '—';
+                document.getElementById('prev-body-box').innerText = data.body_text || 'No body.';
+                
+                previewDraft();
+            } catch (err) {
+                console.error("Error loading draft preview template:", err);
+            }
+        }
+
+        async function previewDraft() {
+            const cat = document.getElementById('draft-template').value;
+            if (!cat) return;
+            
+            let vars = {};
+            try {
+                vars = JSON.parse(document.getElementById('draft-variables').value || '{}');
+            } catch (e) {
+                // Invalid JSON, ignore and use un-personalized template
+            }
+            
+            try {
+                const response = await fetch('/preview-template', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category: cat, vars: vars })
+                });
+                
+                const data = await response.json();
+                document.getElementById('prev-subject-line').textContent = data.subject || '—';
+                
+                // Formats newlines as HTML paragraphs safely
+                let text = data.body || '';
+                let formatted = text.split('\n').map(line => {
+                    let s = line.trim();
+                    if (s === '') return '<div style="height:8px;"></div>';
+                    if (s.startsWith('- ')) return `<div style="margin:4px 0 4px 16px;">• ${s.substring(2)}</div>`;
+                    return `<div>${s}</div>`;
+                }).join('');
+                
+                document.getElementById('prev-body-box').innerHTML = formatted || 'No body.';
+            } catch (err) {
+                console.error("Draft rendering failed:", err);
+            }
+        }
+
+        // ── TAB 5: EMAIL TRACKING ──────────────────────────────────────────
+        async function loadTracking(filter) {
+            currentFilter = filter;
+            const container = document.getElementById('tracking-table-body');
+            container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--muted);">Loading tracking data...</td></tr>`;
+            
+            try {
+                const response = await fetch(`/tracking-stats?filter=${filter}&limit=200`);
+                const data = await response.json();
+                
+                // Update count cards
+                const sum = data.summary || {};
+                document.getElementById('tr-total').textContent = sum.total || 0;
+                document.getElementById('tr-opened').textContent = sum.opened || 0;
+                document.getElementById('tr-replied').textContent = sum.replied || 0;
+                document.getElementById('tr-48h').textContent = sum.not_opened_48h || 0;
+                
+                if (!data.emails || data.emails.length === 0) {
+                    container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--muted);">No matching tracking data found.</td></tr>`;
+                    return;
+                }
+                
+                container.innerHTML = data.emails.map(e => {
+                    let statusBadge = '';
+                    if (e.replied) {
+                        statusBadge = '<span class="badge badge-done">Replied</span>';
+                    } else if (e.opened) {
+                        statusBadge = '<span class="badge badge-running">Opened</span>';
+                    } else if (e.alerted_48h) {
+                        statusBadge = '<span class="badge badge-paused">48h Alert</span>';
+                    } else {
+                        statusBadge = '<span class="badge badge-idle">Sent</span>';
+                    }
+                    
+                    const actionBtn = !e.replied ? 
+                        `<button class="btn btn-secondary btn-sm" onclick="markAsReplied(${e.id})">Mark Replied</button>` : 
+                        `—`;
+                        
+                    let sentTime = e.sent_at ? e.sent_at.split('.')[0] : '—';
+                    
+                    let htmlRow = `
+                    <tr>
+                        <td style="font-weight:600;">${e.to_email}</td>
+                        <td style="color:var(--muted);">${e.company_name || '—'} <div style="font-size:10px; color:var(--hint);">${e.owner_name || ''}</div></td>
+                        <td style="color:var(--hint); font-size:12px;">${e.sender_email}</td>
+                        <td style="color:var(--muted); font-size:12px;">${sentTime}</td>
+                        <td style="text-align:center;">${statusBadge}</td>
+                        <td style="text-align:center;">${actionBtn}</td>
+                    </tr>`;
+                    
+                    if (e.reply_preview) {
+                        htmlRow += `
+                        <tr class="reply-preview-row">
+                            <td colspan="6">
+                                <div class="reply-preview-container">
+                                    <b>Reply Preview:</b> "${e.reply_preview}"
+                                </div>
+                            </td>
+                        </tr>`;
+                    }
+                    
+                    return htmlRow;
+                }).join('');
+            } catch (err) {
+                container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--danger);">Error loading tracking data: ${err}</td></tr>`;
+            }
+        }
+
+        async function markAsReplied(id) {
+            try {
+                const response = await fetch(`/mark-replied/${id}`, { method: 'POST' });
+                const res = await response.json();
+                if (res.ok) {
+                    loadTracking(currentFilter);
+                } else {
+                    alert('Error marking email as replied.');
+                }
+            } catch (err) {
+                alert('Connection error: ' + err);
+            }
+        }
+
+        function refreshTracking() {
+            loadTracking(currentFilter);
+        }
+
+        // ── TAB 6: SETTINGS PANEL ──────────────────────────────────────────
+        function loadSettingsData() {
+            loadSendersSettingsList();
+            loadSenderTemplateMappings();
+            loadGlobalSettings();
+        }
+
+        async function loadGlobalSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                if (response.ok) {
+                    const settings = await response.json();
+                    document.getElementById('setting-tracking-url').value = settings.tracking_base_url || '';
+                    document.getElementById('setting-password').value = settings.dashboard_password || '';
+                    
+                    const warningEl = document.getElementById('tracking-url-warning');
+                    if (warningEl) {
+                        const url = (settings.tracking_base_url || '').trim().toLowerCase();
+                        if (!url || url.includes('localhost') || url.includes('127.0.0.1') || url.includes('192.168.') || !url.startsWith('https://')) {
+                            warningEl.style.display = 'block';
+                        } else {
+                            warningEl.style.display = 'none';
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Error loading global settings:", err);
+            }
+        }
+
+        async function saveGlobalSettings() {
+            const tracking_base_url = document.getElementById('setting-tracking-url').value.trim();
+            const dashboard_password = document.getElementById('setting-password').value.trim();
+            
+            if (!dashboard_password) {
+                alert("Password cannot be empty!");
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tracking_base_url, dashboard_password })
+                });
+                
+                if (response.ok) {
+                    localStorage.setItem("mailer_password", dashboard_password);
+                    alert("Global Settings saved successfully!");
+                } else {
+                    const err = await response.json();
+                    alert("Error saving settings: " + (err.error || response.statusText));
+                }
+            } catch (err) {
+                alert("Error saving settings: " + err);
+            }
+        }
+
+        async function loadSendersSettingsList() {
+            try {
+                const response = await fetch('/api/senders');
+                const list = await response.json();
+                
+                const container = document.getElementById('settings-senders-list');
+                container.innerHTML = list.map(s => `
+                    <div class="sender-item-card">
+                        <div class="sender-item-title">${s.display_name}</div>
+                        <div class="sender-item-subtitle">${s.email} (${s.provider_type.toUpperCase()})</div>
+                        <div class="sender-item-meta">
+                            <span>Limit: ${s.daily_limit}</span>
+                            <span>Delay: ${s.delay_min !== undefined ? s.delay_min : 60}-${s.delay_max !== undefined ? s.delay_max : 120}s</span>
+                            <span>Status: ${s.active ? '<span style="color:var(--accent)">Active</span>' : '<span style="color:var(--danger)">Inactive</span>'}</span>
+                        </div>
+                        <div class="sender-item-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="editSenderAccount('${s.email}')">Edit</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteSenderAccount('${s.email}')">Delete</button>
+                        </div>
+                    </div>
+                `).join('') || `<div style="color:var(--muted); font-size:13px;">No sender accounts configured. Fill form below to create.</div>`;
+            } catch (err) {
+                console.error("Error loading settings senders list:", err);
+            }
+        }
+
+        function toggleProviderSettings() {
+            const p = document.getElementById('snd-provider').value;
+            if (p === 'brevo') {
+                document.getElementById('snd-brevo-block').style.display = 'block';
+                document.getElementById('snd-smtp-block').style.display = 'none';
+            } else {
+                document.getElementById('snd-brevo-block').style.display = 'none';
+                document.getElementById('snd-smtp-block').style.display = 'block';
+            }
+        }
+
+        async function saveSenderAccount() {
+            const email = document.getElementById('snd-email').value.trim();
+            const display_name = document.getElementById('snd-display-name').value.trim();
+            const provider_type = document.getElementById('snd-provider').value;
+            const api_key = document.getElementById('snd-api-key').value.trim();
+            const smtp_host = document.getElementById('snd-smtp-host').value.trim();
+            const smtp_port = document.getElementById('snd-smtp-port').value.trim();
+            const smtp_password = document.getElementById('snd-smtp-pass').value.trim();
+            const imap_host = document.getElementById('snd-imap-host').value.trim();
+            const imap_port = document.getElementById('snd-imap-port').value.trim();
+            const imap_password = document.getElementById('snd-imap-pass').value.trim();
+            const daily_limit = document.getElementById('snd-limit').value.trim();
+            const delay_min = document.getElementById('snd-delay-min').value.trim();
+            const delay_max = document.getElementById('snd-delay-max').value.trim();
+            const active = document.getElementById('snd-active').checked;
+            
+            if (!email || !display_name) {
+                alert('Please enter Email Address and Display Name.');
+                return;
+            }
+            
+            const payload = {
+                email, display_name, provider_type, api_key, smtp_host, 
+                smtp_port: smtp_port ? parseInt(smtp_port) : null,
+                smtp_password, imap_host, 
+                imap_port: imap_port ? parseInt(imap_port) : null,
+                imap_password, 
+                daily_limit: parseInt(daily_limit), 
+                delay_min: parseInt(delay_min),
+                delay_max: parseInt(delay_max),
+                active
+            };
+            
+            try {
+                const response = await fetch('/api/senders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const res = await response.json();
+                if (res.ok) {
+                    alert('Sender account saved.');
+                    resetSenderForm();
+                    loadSenders();
+                    loadSendersSettingsList();
+                } else {
+                    alert('Error saving account: ' + res.error);
+                }
+            } catch (err) {
+                alert('Connection error: ' + err);
+            }
+        }
+
+        function editSenderAccount(email) {
+            const s = sendersList.find(snd => snd.email === email);
+            if (!s) return;
+            
+            document.getElementById('snd-email').value = s.email;
+            document.getElementById('snd-email').readOnly = true;
+            document.getElementById('snd-display-name').value = s.display_name;
+            document.getElementById('snd-provider').value = s.provider_type;
+            
+            // Password fields left blank to represent "no change" unless filled in
+            document.getElementById('snd-api-key').value = s.api_key || '';
+            document.getElementById('snd-smtp-host').value = s.smtp_host || '';
+            document.getElementById('snd-smtp-port').value = s.smtp_port || '';
+            document.getElementById('snd-smtp-pass').value = '';
+            document.getElementById('snd-imap-host').value = s.imap_host || '';
+            document.getElementById('snd-imap-port').value = s.imap_port || '';
+            document.getElementById('snd-imap-pass').value = '';
+            document.getElementById('snd-limit').value = s.daily_limit;
+            document.getElementById('snd-delay-min').value = s.delay_min !== undefined ? s.delay_min : 60;
+            document.getElementById('snd-delay-max').value = s.delay_max !== undefined ? s.delay_max : 120;
+            document.getElementById('snd-active').checked = s.active;
+            
+            document.getElementById('sender-form-title').textContent = "Edit Sender: " + s.email;
+            document.getElementById('snd-is-edit').value = "true";
+            document.getElementById('btn-cancel-edit').style.display = 'block';
+            
+            toggleProviderSettings();
+        }
+
+        async function deleteSenderAccount(email) {
+            if (!confirm(`Are you sure you want to delete sender ${email}?`)) return;
+            
+            try {
+                const response = await fetch(`/api/senders/${encodeURIComponent(email)}`, { method: 'DELETE' });
+                const res = await response.json();
+                if (res.ok) {
+                    alert('Account deleted.');
+                    resetSenderForm();
+                    loadSenders();
+                    loadSendersSettingsList();
+                } else {
+                    alert('Delete failed.');
+                }
+            } catch (err) {
+                alert('Connection error: ' + err);
+            }
+        }
+
+        function resetSenderForm() {
+            document.getElementById('snd-email').value = '';
+            document.getElementById('snd-email').readOnly = false;
+            document.getElementById('snd-display-name').value = '';
+            document.getElementById('snd-provider').value = 'brevo';
+            document.getElementById('snd-api-key').value = '';
+            document.getElementById('snd-smtp-host').value = '';
+            document.getElementById('snd-smtp-port').value = '';
+            document.getElementById('snd-smtp-pass').value = '';
+            document.getElementById('snd-imap-host').value = '';
+            document.getElementById('snd-imap-port').value = '';
+            document.getElementById('snd-imap-pass').value = '';
+            document.getElementById('snd-limit').value = '1500';
+            document.getElementById('snd-delay-min').value = '60';
+            document.getElementById('snd-delay-max').value = '120';
+            document.getElementById('snd-active').checked = true;
+            
+            document.getElementById('sender-form-title').textContent = "Add Sender Account";
+            document.getElementById('snd-is-edit').value = "false";
+            document.getElementById('btn-cancel-edit').style.display = 'none';
+            
+            toggleProviderSettings();
+        }
+
+        // Mappings Grid
+        async function loadSenderTemplateMappings() {
+            const sender = document.getElementById('map-sender-select').value;
+            if (!sender) return;
+            
+            try {
+                // Ensure templates list is populated
+                if (templatesList.length === 0) {
+                    const response = await fetch('/templates-list-full');
+                    templatesList = await response.json();
+                }
+                
+                // Fetch current mapped categories for this sender
+                const res = await fetch(`/templates-by-sender?sender=${encodeURIComponent(sender)}`);
+                const mappedCats = (await res.json()).map(t => t.category);
+                
+                const checklist = document.getElementById('map-templates-checklist');
+                
+                checklist.innerHTML = templatesList.map(t => {
+                    const isChecked = mappedCats.includes(t.category) ? 'checked' : '';
+                    return `
+                    <label class="mapping-checkbox-item">
+                        <input type="checkbox" value="${t.category}" ${isChecked} onchange="saveMappingChange()">
+                        <span>${t.category}</span>
+                    </label>`;
+                }).join('') || `<div style="color:var(--muted); font-size:12px; padding:10px;">Create templates first.</div>`;
+            } catch (err) {
+                console.error("Error loading mapping list:", err);
+            }
+        }
+
+        async function saveMappingChange() {
+            const sender = document.getElementById('map-sender-select').value;
+            const checkedBoxes = document.querySelectorAll('#map-templates-checklist input[type=checkbox]:checked');
+            const categories = Array.from(checkedBoxes).map(cb => cb.value);
+            
+            try {
+                const response = await fetch('/api/sender-mappings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sender_email: sender, categories: categories })
+                });
+                
+                // Mappings updated successfully (run silently or log)
+                console.log(`Mappings updated for ${sender}`);
+            } catch (err) {
+                alert('Failed to save mapping change: ' + err);
+            }
+        }
+
+        // Initialize App on Window Load
+        window.onload = function() {
+            initData();
+        };
+    </script>
+</body>
+</html>

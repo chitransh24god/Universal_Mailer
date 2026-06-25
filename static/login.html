@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSD Finserv — Mailer Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            --text: #0f172a;
+            --muted: #475569;
+            --accent: #059669;
+            --accent-glow: rgba(5, 150, 105, 0.08);
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+        /* Background animations */
+        body::before {
+            content: '';
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            top: 20%;
+            left: 25%;
+            z-index: 1;
+            filter: blur(40px);
+        }
+        body::after {
+            content: '';
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(5, 150, 105, 0.04) 0%, transparent 70%);
+            bottom: 20%;
+            right: 25%;
+            z-index: 1;
+            filter: blur(40px);
+        }
+        .box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 40px;
+            width: 380px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+            z-index: 10;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+        .box:hover {
+            border-color: rgba(5, 150, 105, 0.25);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.05), 0 0 20px rgba(5, 150, 105, 0.03);
+        }
+        .icon {
+            width: 56px;
+            height: 56px;
+            background: var(--accent-glow);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            border: 1px solid rgba(5, 150, 105, 0.15);
+            box-shadow: 0 4px 10px rgba(5, 150, 105, 0.05);
+        }
+        .icon svg {
+            fill: var(--accent);
+        }
+        h2 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+            color: var(--text);
+        }
+        p {
+            font-size: 14px;
+            color: var(--muted);
+            margin-bottom: 30px;
+        }
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 15px;
+            color: var(--text);
+            margin-bottom: 18px;
+            outline: none;
+            font-family: 'Outfit', sans-serif;
+            transition: all 0.2s ease;
+        }
+        input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+            background: #ffffff;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            box-shadow: 0 4px 15px rgba(5, 150, 105, 0.2);
+            transition: all 0.2s ease;
+        }
+        button:hover {
+            background: #047857;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(5, 150, 105, 0.25);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <div class="icon">
+            <svg width="26" height="26" viewBox="0 0 24 24">
+                <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/>
+            </svg>
+        </div>
+        <h2>VSD Finserv Mailer</h2>
+        <p>Enter password to access dashboard</p>
+        <input type="password" id="pwd" placeholder="Password" onkeydown="if(event.key==='Enter')login()">
+        <button onclick="login()">Access Dashboard</button>
+    </div>
+    <script>
+        function login() {
+            var p = document.getElementById('pwd').value;
+            if (p) {
+                localStorage.setItem("mailer_password", p);
+                window.location.href = '/?pwd=' + encodeURIComponent(p);
+            }
+        }
+        // Auto redirect if password already exists in storage
+        window.onload = function() {
+            var stored = localStorage.getItem("mailer_password");
+            if (stored && window.location.search.indexOf("pwd") === -1) {
+                window.location.href = '/?pwd=' + encodeURIComponent(stored);
+            }
+        }
+    </script>
+</body>
+</html>
