@@ -371,12 +371,22 @@ def send_via_custom_smtp(to_email, subject, html_body, plain_body, sender_email,
                     srv.login(smtp_user, smtp_pass)
                     srv.sendmail(sender_email, [to_email], msg.as_string())
             else:
-                with smtplib.SMTP(smtp_host, int(smtp_port), timeout=30) as srv:
-                    srv.ehlo()
-                    srv.starttls()
-                    srv.ehlo()
-                    srv.login(smtp_user, smtp_pass)
-                    srv.sendmail(sender_email, [to_email], msg.as_string())
+                try:
+                    with smtplib.SMTP(smtp_host, int(smtp_port), timeout=30) as srv:
+                        srv.ehlo()
+                        srv.starttls()
+                        srv.ehlo()
+                        srv.login(smtp_user, smtp_pass)
+                        srv.sendmail(sender_email, [to_email], msg.as_string())
+                except Exception as starttls_err:
+                    # Fallback to SSL port 465 if configured port was 587 and failed
+                    if int(smtp_port) == 587:
+                        with smtplib.SMTP_SSL(smtp_host, 465, timeout=30) as srv:
+                            srv.ehlo()
+                            srv.login(smtp_user, smtp_pass)
+                            srv.sendmail(sender_email, [to_email], msg.as_string())
+                    else:
+                        raise starttls_err
             return True, msg_id
         except smtplib.SMTPAuthenticationError as e:
             return False, f"SMTP auth failed. ({e})"
@@ -822,11 +832,20 @@ async def save_sender(request: Request):
                             with smtplib.SMTP_SSL(smtp_host, int(port), timeout=10) as srv:
                                 srv.login(smtp_user, test_smtp_pass)
                         else:
-                            with smtplib.SMTP(smtp_host, int(port), timeout=10) as srv:
-                                srv.ehlo()
-                                srv.starttls()
-                                srv.ehlo()
-                                srv.login(smtp_user, test_smtp_pass)
+                            try:
+                                with smtplib.SMTP(smtp_host, int(port), timeout=10) as srv:
+                                    srv.ehlo()
+                                    srv.starttls()
+                                    srv.ehlo()
+                                    srv.login(smtp_user, test_smtp_pass)
+                            except Exception as e:
+                                # Fallback to port 465 if port 587 fails
+                                if int(port) == 587:
+                                    with smtplib.SMTP_SSL(smtp_host, 465, timeout=10) as srv:
+                                        srv.ehlo()
+                                        srv.login(smtp_user, test_smtp_pass)
+                                else:
+                                    raise e
                     except Exception as e:
                         return JSONResponse(status_code=400, content={"error": f"SMTP Connection failed: {e}"})
                 
