@@ -78,6 +78,43 @@ def execute_query(query, params=None, fetch=None, commit=True):
     finally:
         conn.close()
 
+def check_column_exists(table_name, column_name):
+    """
+    Checks if a column exists in a database table without raising log errors.
+    """
+    conn, is_sqlite = get_connection()
+    try:
+        cur = conn.cursor()
+        if is_sqlite:
+            cur.execute(f"PRAGMA table_info({table_name});")
+            rows = cur.fetchall()
+            columns = []
+            for r in rows:
+                if isinstance(r, dict):
+                    columns.append(r.get("name", ""))
+                elif hasattr(r, "keys"):
+                    columns.append(r["name"])
+                else:
+                    columns.append(r[1])
+        else:
+            cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name='{table_name}';")
+            rows = cur.fetchall()
+            columns = []
+            for r in rows:
+                if isinstance(r, dict):
+                    columns.append(r.get("column_name", ""))
+                elif hasattr(r, "keys"):
+                    columns.append(r["column_name"])
+                else:
+                    columns.append(r[0])
+        cur.close()
+        return column_name in columns
+    except Exception as e:
+        print(f"[DB Migration Check] Error checking column: {e}")
+        return False
+    finally:
+        conn.close()
+
 def init_db():
     """
     Creates necessary tables and seeds default senders, templates, and mappings.
@@ -116,14 +153,16 @@ def init_db():
     """)
     
     # Run migrations for new columns
-    try:
-        execute_query("ALTER TABLE sender_accounts ADD COLUMN delay_min INTEGER DEFAULT 60;")
-    except Exception:
-        pass
-    try:
-        execute_query("ALTER TABLE sender_accounts ADD COLUMN delay_max INTEGER DEFAULT 120;")
-    except Exception:
-        pass
+    if not check_column_exists("sender_accounts", "delay_min"):
+        try:
+            execute_query("ALTER TABLE sender_accounts ADD COLUMN delay_min INTEGER DEFAULT 60;")
+        except Exception:
+            pass
+    if not check_column_exists("sender_accounts", "delay_max"):
+        try:
+            execute_query("ALTER TABLE sender_accounts ADD COLUMN delay_max INTEGER DEFAULT 120;")
+        except Exception:
+            pass
     
     # 3. Sender Template Map
     execute_query("""
@@ -454,7 +493,6 @@ VSD Finserv Pvt. Ltd.
 99784 80401"""
         ),
     ]
-    
     # 2. Seed Senders
     DEFAULT_SENDERS = [
         {
@@ -465,7 +503,9 @@ VSD Finserv Pvt. Ltd.
             "imap_host": "mail.mybankloan.ai",
             "imap_port": 993,
             "imap_password": os.environ.get("IMAP_PASS_ADMIN", ""),
-            "daily_limit": 1500
+            "daily_limit": 1500,
+            "delay_min": 60,
+            "delay_max": 120
         },
         {
             "email": "cayagya@mybankloan.ai",
@@ -475,7 +515,9 @@ VSD Finserv Pvt. Ltd.
             "imap_host": "mail.mybankloan.ai",
             "imap_port": 993,
             "imap_password": os.environ.get("IMAP_PASS_CAYAGYA", ""),
-            "daily_limit": 1500
+            "daily_limit": 1500,
+            "delay_min": 60,
+            "delay_max": 120
         },
         {
             "email": "bl@mybankloan.ai",
@@ -485,7 +527,9 @@ VSD Finserv Pvt. Ltd.
             "imap_host": "mail.mybankloan.ai",
             "imap_port": 993,
             "imap_password": os.environ.get("IMAP_PASS_BL", ""),
-            "daily_limit": 1500
+            "daily_limit": 1500,
+            "delay_min": 60,
+            "delay_max": 120
         },
         {
             "email": "invest@mybankloan.ai",
@@ -495,7 +539,9 @@ VSD Finserv Pvt. Ltd.
             "imap_host": "us2.imapserver.mailhostbox.com",
             "imap_port": 993,
             "imap_password": os.environ.get("IMAP_PASS_INVEST", ""),
-            "daily_limit": 1500
+            "daily_limit": 1500,
+            "delay_min": 60,
+            "delay_max": 120
         },
         {
             "email": "vsdgroups2013@gmail.com",
@@ -509,32 +555,99 @@ VSD Finserv Pvt. Ltd.
             "imap_host": "imap.gmail.com",
             "imap_port": 993,
             "imap_password": os.environ.get("IMAP_PASS_GMAIL", ""),
-            "daily_limit": 1500
+            "daily_limit": 1500,
+            "delay_min": 60,
+            "delay_max": 120
+        },
+        {
+            "email": "vsdfinservebl@gmail.com",
+            "display_name": "VSD Finserv",
+            "provider_type": "smtp",
+            "api_key": "",
+            "smtp_host": "smtp.gmail.com",
+            "smtp_port": 587,
+            "smtp_username": "vsdfinservebl@gmail.com",
+            "smtp_password": os.environ.get("SMTP_PASS_VSDFINSERVEBL", "zpkpcpilnfaityqz"),
+            "imap_host": "imap.gmail.com",
+            "imap_port": 993,
+            "imap_password": os.environ.get("IMAP_PASS_VSDFINSERVEBL", "zpkpcpilnfaityqz"),
+            "daily_limit": 1500,
+            "delay_min": 60,
+            "delay_max": 120
+        },
+        {
+            "email": "cayagyait@gmail.com",
+            "display_name": "Working Capital Assessment",
+            "provider_type": "smtp",
+            "api_key": "",
+            "smtp_host": "smtp.gmail.com",
+            "smtp_port": 587,
+            "smtp_username": "cayagyait@gmail.com",
+            "smtp_password": os.environ.get("SMTP_PASS_CAYAGYAIT", "ggztddsbstthrpda"),
+            "imap_host": "imap.gmail.com",
+            "imap_port": 993,
+            "imap_password": os.environ.get("IMAP_PASS_CAYAGYAIT", "ggztddsbstthrpda"),
+            "daily_limit": 1500,
+            "delay_min": 120,
+            "delay_max": 300
+        },
+        {
+            "email": "opulentmar@gmail.com",
+            "display_name": "Vikshit Bharat",
+            "provider_type": "smtp",
+            "api_key": "",
+            "smtp_host": "smtp.gmail.com",
+            "smtp_port": 587,
+            "smtp_username": "opulentmar@gmail.com",
+            "smtp_password": os.environ.get("SMTP_PASS_OPULENTMAR", "auzuzixuqlkuasee"),
+            "imap_host": "imap.gmail.com",
+            "imap_port": 993,
+            "imap_password": os.environ.get("IMAP_PASS_OPULENTMAR", "auzuzixuqlkuasee"),
+            "daily_limit": 1500,
+            "delay_min": 90,
+            "delay_max": 300
         }
     ]
     
     # 3. Seed Mappings
     DEFAULT_SENDER_TEMPLATES = {
-        "admin@mybankloan.ai":     ["Government Subsidies"],
+        "admin@mybankloan.ai":     ["Government Subsidies", "Business Loan"],
         "invest@mybankloan.ai":    ["Government Subsidies", "Employee Financial Wellness"],
         "cayagya@mybankloan.ai":   ["Electronics Policy", "IT Policy", "Textile Policy"],
         "bl@mybankloan.ai":        ["Business Loan"],
         "vsdgroups2013@gmail.com": ["Co-Working Space", "Government Subsidies", "Business Loan",
                                     "Electronics Policy", "IT Policy", "Textile Policy",
                                     "Employee Financial Wellness"],
+        "vsdfinservebl@gmail.com": ["Business Loan"],
+        "cayagyait@gmail.com":     ["Business Loan", "Vikshit Bharat"],
+        "opulentmar@gmail.com":    ["Vikshit Bharat"],
     }
     
     # Insert Senders
     for snd in DEFAULT_SENDERS:
         execute_query("""
             INSERT INTO sender_accounts 
-            (email, display_name, provider_type, api_key, smtp_host, smtp_port, smtp_username, smtp_password, imap_host, imap_port, imap_password, daily_limit)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (email) DO NOTHING;
+            (email, display_name, provider_type, api_key, smtp_host, smtp_port, smtp_username, smtp_password, imap_host, imap_port, imap_password, daily_limit, delay_min, delay_max)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (email) DO UPDATE SET
+                display_name=EXCLUDED.display_name,
+                provider_type=EXCLUDED.provider_type,
+                api_key=EXCLUDED.api_key,
+                smtp_host=EXCLUDED.smtp_host,
+                smtp_port=EXCLUDED.smtp_port,
+                smtp_username=EXCLUDED.smtp_username,
+                smtp_password=EXCLUDED.smtp_password,
+                imap_host=EXCLUDED.imap_host,
+                imap_port=EXCLUDED.imap_port,
+                imap_password=EXCLUDED.imap_password,
+                daily_limit=EXCLUDED.daily_limit,
+                delay_min=EXCLUDED.delay_min,
+                delay_max=EXCLUDED.delay_max;
         """, [
             snd["email"], snd["display_name"], snd["provider_type"], snd["api_key"],
             snd.get("smtp_host"), snd.get("smtp_port"), snd.get("smtp_username"), snd.get("smtp_password"),
-            snd.get("imap_host"), snd.get("imap_port"), snd.get("imap_password"), snd["daily_limit"]
+            snd.get("imap_host"), snd.get("imap_port"), snd.get("imap_password"), snd["daily_limit"],
+            snd.get("delay_min", 60), snd.get("delay_max", 120)
         ])
         
     # Insert Templates

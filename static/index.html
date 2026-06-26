@@ -1131,9 +1131,15 @@
                                 <label>Daily Email Limit</label>
                                 <input type="number" id="snd-limit" value="1500">
                             </div>
-                            <div class="field" style="display:flex; align-items:center; gap:10px; margin-top:16px;">
-                                <input type="checkbox" id="snd-active" checked style="width:18px; height:18px; accent-color:var(--accent);">
-                                <label for="snd-active" style="margin-bottom:0; cursor:pointer;">Account Active</label>
+                            <div class="field" style="display:flex; flex-direction:column; gap:5px; margin-top:16px;">
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <input type="checkbox" id="snd-active" checked style="width:18px; height:18px; accent-color:var(--accent);">
+                                    <label for="snd-active" style="margin-bottom:0; cursor:pointer;">Account Active</label>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <input type="checkbox" id="snd-skip-test" style="width:18px; height:18px; accent-color:var(--accent);">
+                                    <label for="snd-skip-test" style="margin-bottom:0; cursor:pointer; font-weight:bold; color:var(--text);">Skip connection test on save</label>
+                                </div>
                             </div>
                         </div>
                         
@@ -1858,6 +1864,7 @@
             const delay_min = document.getElementById('snd-delay-min').value.trim();
             const delay_max = document.getElementById('snd-delay-max').value.trim();
             const active = document.getElementById('snd-active').checked;
+            const skip_test = document.getElementById('snd-skip-test').checked;
             
             if (!email || !display_name) {
                 alert('Please enter Email Address and Display Name.');
@@ -1873,7 +1880,8 @@
                 daily_limit: parseInt(daily_limit), 
                 delay_min: parseInt(delay_min),
                 delay_max: parseInt(delay_max),
-                active
+                active,
+                skip_test
             };
             
             try {
@@ -1917,6 +1925,7 @@
             document.getElementById('snd-delay-min').value = s.delay_min !== undefined ? s.delay_min : 60;
             document.getElementById('snd-delay-max').value = s.delay_max !== undefined ? s.delay_max : 120;
             document.getElementById('snd-active').checked = s.active;
+            document.getElementById('snd-skip-test').checked = false;
             
             document.getElementById('sender-form-title').textContent = "Edit Sender: " + s.email;
             document.getElementById('snd-is-edit').value = "true";
@@ -1960,6 +1969,7 @@
             document.getElementById('snd-delay-min').value = '60';
             document.getElementById('snd-delay-max').value = '120';
             document.getElementById('snd-active').checked = true;
+            document.getElementById('snd-skip-test').checked = false;
             
             document.getElementById('sender-form-title').textContent = "Add Sender Account";
             document.getElementById('snd-is-edit').value = "false";
