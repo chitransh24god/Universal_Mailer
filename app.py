@@ -787,6 +787,7 @@ async def save_sender(request: Request):
         imap_password = body.get("imap_password", "").strip()
         daily_limit = int(body.get("daily_limit", 1500))
         delay_min = int(body.get("delay_min", 60))
+        delay_max = int(body.get("delay_max", 120))
         active = bool(body.get("active", True))
         skip_test = bool(body.get("skip_test", False))
         
