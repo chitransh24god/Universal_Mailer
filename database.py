@@ -248,8 +248,8 @@ def seed_defaults():
     """)
     execute_query("""
         INSERT INTO global_settings (key, value)
-        VALUES ('dashboard_password', 'Mybankloan.ai@2023')
-        ON CONFLICT (key) DO NOTHING;
+        VALUES ('dashboard_password', 'Mybankloan.ai')
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
     """)
     
     # 1. Seed Templates

@@ -25,7 +25,7 @@ IST = pytz.timezone("Asia/Kolkata")
 DAILY_LIMIT = 1500  # Default fallback global limit
 DELAY_MIN_SECS = 60
 DELAY_MAX_SECS = 120
-DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "Mybankloan")
+DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "Mybankloan.ai")
 
 def get_dashboard_password():
     try:
