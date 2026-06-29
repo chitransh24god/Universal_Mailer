@@ -248,9 +248,9 @@ def seed_defaults():
         VALUES ('tracking_base_url', 'https://universal-mailer.onrender.com')
         ON CONFLICT (key) DO UPDATE SET value = 
             CASE 
-                WHEN value = '' OR value LIKE %s OR value LIKE %s 
+                WHEN global_settings.value = '' OR global_settings.value LIKE %s OR global_settings.value LIKE %s 
                 THEN 'https://universal-mailer.onrender.com' 
-                ELSE value 
+                ELSE global_settings.value 
             END;
     """, ['%pinggy%', '%universal-bulk-mailer-1%'])
     execute_query("""
