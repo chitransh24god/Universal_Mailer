@@ -324,7 +324,7 @@ def make_html_body(plain_text):
 
 def make_html_body_tracked(plain_text, track_token, base_url=""):
     if not base_url:
-        base_url = os.environ.get("BASE_URL", "https://universal-bulk-mailer-1.onrender.com")
+        base_url = os.environ.get("BASE_URL", "https://universal-mailer.onrender.com")
     body = make_html_body(plain_text)
     pixel = (
         f'<img src="{base_url}/track/{track_token}" '
