@@ -711,7 +711,7 @@ def background_tracker():
             check_48hr_alerts()
         except Exception as e:
             print(f"[48hr alert error] {e}")
-        time.sleep(300)
+        time.sleep(60)
 
 @app.on_event("startup")
 async def startup():
