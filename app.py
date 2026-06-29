@@ -731,6 +731,27 @@ async def track_open(token: str):
     pixel = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
     return Response(content=pixel, media_type="image/gif", headers={"Cache-Control": "no-cache,no-store"})
 
+@app.post("/api/webhooks/brevo")
+async def brevo_webhook(request: Request):
+    try:
+        body = await request.json()
+        event = body.get("event")
+        msg_id = body.get("message-id") or body.get("messageId")
+        
+        if event == "opened" and msg_id:
+            # Mark email as opened in database
+            execute_query("""
+                UPDATE sent_emails 
+                SET opened=TRUE, opened_at=NOW() 
+                WHERE message_id=%s AND opened=FALSE;
+            """, [msg_id])
+            print(f"[Webhook] Email opened via Brevo webhook: message_id={msg_id}")
+            
+        return {"status": "success"}
+    except Exception as e:
+        print(f"[Webhook Error] {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 @app.get("/status")
 async def get_status():
     with campaigns_lock:
