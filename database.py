@@ -248,11 +248,11 @@ def seed_defaults():
         VALUES ('tracking_base_url', 'https://universal-mailer.onrender.com')
         ON CONFLICT (key) DO UPDATE SET value = 
             CASE 
-                WHEN value = '' OR value LIKE '%pinggy%' OR value LIKE '%universal-bulk-mailer-1%' 
+                WHEN value = '' OR value LIKE %s OR value LIKE %s 
                 THEN 'https://universal-mailer.onrender.com' 
                 ELSE value 
             END;
-    """)
+    """, ['%pinggy%', '%universal-bulk-mailer-1%'])
     execute_query("""
         INSERT INTO global_settings (key, value)
         VALUES ('dashboard_password', 'Mybankloan.ai')

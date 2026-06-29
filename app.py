@@ -653,7 +653,7 @@ def poll_replies():
                         from_email = decode_hdr(msg.get("From", ""))
                         subject = decode_hdr(msg.get("Subject", ""))
                         
-                        seq_match = re.match(b'^(\d+)', part[0])
+                        seq_match = re.match(br'^(\d+)', part[0])
                         msg_seq = int(seq_match.group(1)) if seq_match else None
                         
                         if not msg_seq:
