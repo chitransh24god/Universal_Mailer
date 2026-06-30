@@ -509,8 +509,9 @@ VSD Finserv Pvt. Ltd.
             "email": "admin@mybankloan.ai",
             "display_name": "VSD Finserv Pvt. Ltd.",
             "provider_type": "brevo",
-            "api_key": os.environ.get("BREVO_API_KEY_3") or _get_key("41922f5c8dce3cdbf7d907324aa2a3f8972eaa35310ba2c65703fda5f9014922", "8sQWSRFqYRdXZLpv"),
+            "api_key": os.environ.get("BREVO_API_KEY_3") or _get_key("2806a49247bd0fffa44cd3b0e941f7e253986b6f43edc2a44c8394bf034ddb2e", "U1r3N93VewIPQsiD"),
             "imap_host": "mail.mybankloan.ai",
+
             "imap_port": 993,
             "imap_password": os.environ.get("IMAP_PASS_ADMIN", ""),
             "daily_limit": 1500,
