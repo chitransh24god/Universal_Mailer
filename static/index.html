@@ -993,45 +993,97 @@
             </div>
         </div>
 
-        <!-- ── TAB 5: EMAIL TRACKING & REPLIES ─────────────────────────────── -->
+        <!-- ── TAB 5: EMAIL TRACKING ────────────────────────────────────────── -->
         <div class="tab-pane" id="tab-tracking">
             <div class="card">
-                <div class="card-title">Campaign Performance Tracking</div>
-
                 <!-- Tracking URL Setup Notice -->
                 <div class="info-box" id="tracking-url-warning" style="display:none; background-color:#fffbeb; border-color:#fef3c7; color:#b45309; margin-bottom:15px; font-size:13px; line-height:1.5;">
-                    ⚠️ <strong>Tracking Configuration Warning:</strong> Your Tracking Base URL is either empty or configured with a local/non-secure address. To track email opens from external recipients, you must configure a public HTTPS URL (e.g., an <code>ngrok</code> tunnel or public domain) in the Settings tab.
+                    ⚠️ <strong>Tracking Configuration Warning:</strong> Your Tracking Base URL is either empty or configured with a local/non-secure address. To track email opens from external recipients, you must configure a public HTTPS URL in the Settings tab.
                 </div>
-                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-bottom: 20px;">
-                    <div style="background: rgba(5, 150, 105, 0.05); border:1px solid rgba(5, 150, 105, 0.15); border-radius:var(--r); padding:16px; text-align:center;">
-                        <div style="font-size:24px; font-weight:700; color:var(--accent);" id="tr-total">—</div>
-                        <div style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; margin-top:4px;">Total Sent</div>
+
+                <!-- ── SUMMARY STAT CARDS ── -->
+                <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:12px; margin-bottom:20px;">
+                    <div style="background:rgba(5,150,105,0.06);border:1px solid rgba(5,150,105,0.18);border-radius:var(--r);padding:16px;text-align:center;">
+                        <div style="font-size:26px;font-weight:700;color:var(--accent);" id="tr-total">—</div>
+                        <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:4px;">Total Sent</div>
                     </div>
-                    <div style="background: rgba(59, 130, 246, 0.05); border:1px solid rgba(59, 130, 246, 0.15); border-radius:var(--r); padding:16px; text-align:center;">
-                        <div style="font-size:24px; font-weight:700; color:#2563eb;" id="tr-opened">—</div>
-                        <div style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; margin-top:4px;">Opened</div>
+                    <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.18);border-radius:var(--r);padding:16px;text-align:center;">
+                        <div style="font-size:26px;font-weight:700;color:#2563eb;" id="tr-opened">—</div>
+                        <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:4px;">Opened</div>
                     </div>
-                    <div style="background: rgba(5, 150, 105, 0.08); border:1px solid rgba(5, 150, 105, 0.2); border-radius:var(--r); padding:16px; text-align:center;">
-                        <div style="font-size:24px; font-weight:700; color:var(--accent);" id="tr-replied">—</div>
-                        <div style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; margin-top:4px;">Replied</div>
+                    <div style="background:rgba(5,150,105,0.09);border:1px solid rgba(5,150,105,0.22);border-radius:var(--r);padding:16px;text-align:center;">
+                        <div style="font-size:26px;font-weight:700;color:var(--accent);" id="tr-replied">—</div>
+                        <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:4px;">Replied</div>
                     </div>
-                    <div style="background: rgba(220, 38, 38, 0.05); border:1px solid rgba(220, 38, 38, 0.15); border-radius:var(--r); padding:16px; text-align:center;">
-                        <div style="font-size:24px; font-weight:700; color:var(--danger);" id="tr-48h">—</div>
-                        <div style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; margin-top:4px;">Not Opened 48h</div>
+                    <div style="background:rgba(220,38,38,0.05);border:1px solid rgba(220,38,38,0.15);border-radius:var(--r);padding:16px;text-align:center;">
+                        <div style="font-size:26px;font-weight:700;color:var(--danger);" id="tr-48h">—</div>
+                        <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:4px;">Not Opened 48h</div>
+                    </div>
+                    <div style="background:rgba(234,179,8,0.06);border:1px solid rgba(234,179,8,0.2);border-radius:var(--r);padding:16px;text-align:center;">
+                        <div style="font-size:26px;font-weight:700;color:#ca8a04;" id="tr-open-rate">—</div>
+                        <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:4px;">Open Rate</div>
                     </div>
                 </div>
-                
-                <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 16px; flex-wrap:wrap; gap:10px;">
-                    <div style="display:flex; gap:6px;">
-                        <button class="btn btn-secondary btn-sm" onclick="loadTracking('all')">All</button>
-                        <button class="btn btn-secondary btn-sm" onclick="loadTracking('opened')">Opened</button>
-                        <button class="btn btn-secondary btn-sm" onclick="loadTracking('replied')">Replied</button>
-                        <button class="btn btn-secondary btn-sm" onclick="loadTracking('not_opened')">Not Opened</button>
-                        <button class="btn btn-secondary btn-sm" onclick="loadTracking('alert_48h')">48h Alert</button>
+
+                <!-- ── PER-SENDER BREAKDOWN TABLE ── -->
+                <div style="margin-bottom:20px;">
+                    <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">Per Sender Breakdown</div>
+                    <div style="overflow-x:auto;">
+                        <table class="track-table" style="font-size:13px;">
+                            <thead>
+                                <tr>
+                                    <th>Sender Account</th>
+                                    <th style="text-align:center;">Sent</th>
+                                    <th style="text-align:center;">Opened</th>
+                                    <th style="text-align:center;">Replied</th>
+                                    <th style="text-align:center;">Not Opened 48h</th>
+                                    <th style="text-align:center;">Open Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody id="per-sender-table-body">
+                                <tr><td colspan="6" style="text-align:center;padding:16px;color:var(--muted);">Loading...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
-                    <button class="btn btn-secondary btn-sm" onclick="refreshTracking()">Refresh</button>
                 </div>
-                
+
+                <!-- ── FILTERS ROW ── -->
+                <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px;padding:14px;background:var(--surface-lt);border-radius:var(--r);border:1px solid var(--border);">
+                    <!-- Date From -->
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <label style="font-size:12px;color:var(--muted);font-weight:600;">FROM</label>
+                        <input type="date" id="tr-date-from" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;" onchange="loadTracking(currentFilter)">
+                    </div>
+                    <!-- Date To -->
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <label style="font-size:12px;color:var(--muted);font-weight:600;">TO</label>
+                        <input type="date" id="tr-date-to" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;" onchange="loadTracking(currentFilter)">
+                    </div>
+                    <!-- Sender Filter -->
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <label style="font-size:12px;color:var(--muted);font-weight:600;">SENDER</label>
+                        <select id="tr-sender-filter" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;" onchange="loadTracking(currentFilter)">
+                            <option value="">All Senders</option>
+                        </select>
+                    </div>
+                    <!-- Clear Filters -->
+                    <button class="btn btn-secondary btn-sm" onclick="clearTrackingFilters()">Clear Filters</button>
+                    <!-- Spacer -->
+                    <div style="flex:1;"></div>
+                    <!-- Status Filters -->
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                        <button class="btn btn-secondary btn-sm" id="tr-btn-all" onclick="loadTracking('all')" style="background:var(--accent);color:#fff;">All</button>
+                        <button class="btn btn-secondary btn-sm" id="tr-btn-opened" onclick="loadTracking('opened')">Opened</button>
+                        <button class="btn btn-secondary btn-sm" id="tr-btn-replied" onclick="loadTracking('replied')">Replied</button>
+                        <button class="btn btn-secondary btn-sm" id="tr-btn-not_opened" onclick="loadTracking('not_opened')">Not Opened</button>
+                        <button class="btn btn-secondary btn-sm" id="tr-btn-alert_48h" onclick="loadTracking('alert_48h')">48h Alert</button>
+                    </div>
+                    <!-- Refresh & Download -->
+                    <button class="btn btn-secondary btn-sm" onclick="refreshTracking()">↺ Refresh</button>
+                    <button class="btn btn-sm" id="tr-download-btn" onclick="downloadTracking()" style="background:var(--accent);color:#fff;border:none;">⬇ Download CSV</button>
+                </div>
+
+                <!-- ── EMAIL TRACKING TABLE ── -->
                 <div style="overflow-x:auto;">
                     <table class="track-table">
                         <thead>
@@ -1268,6 +1320,7 @@
                 const launchSel = document.getElementById('launch-sender');
                 const assocSel = document.getElementById('tmpl-sender-assoc');
                 const mapSel = document.getElementById('map-sender-select');
+                const trSenderFilter = document.getElementById('tr-sender-filter');
                 
                 let opts = sendersList.map(s => `<option value="${s.email}">${s.display_name} &lt;${s.email}&gt;</option>`).join('');
                 if (!opts) opts = `<option value="">No senders configured</option>`;
@@ -1275,6 +1328,9 @@
                 launchSel.innerHTML = opts;
                 assocSel.innerHTML = `<option value="">Generic (All Senders)</option>` + opts;
                 mapSel.innerHTML = opts;
+                if (trSenderFilter) {
+                    trSenderFilter.innerHTML = `<option value="">All Senders</option>` + opts;
+                }
                 
                 // Warn about Gmail
                 checkGmailWarning();
@@ -1282,6 +1338,7 @@
                 console.error("Error loading senders:", err);
             }
         }
+
 
         function checkGmailWarning() {
             const email = document.getElementById('launch-sender').value;
@@ -1671,19 +1728,45 @@
         // ── TAB 5: EMAIL TRACKING ──────────────────────────────────────────
         async function loadTracking(filter) {
             currentFilter = filter;
+            
+            // Highlight active status button
+            ['all','opened','replied','not_opened','alert_48h'].forEach(f => {
+                const btn = document.getElementById('tr-btn-' + f);
+                if (btn) {
+                    btn.style.background = (f === filter) ? 'var(--accent)' : '';
+                    btn.style.color = (f === filter) ? '#fff' : '';
+                }
+            });
+
             const container = document.getElementById('tracking-table-body');
             container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--muted);">Loading tracking data...</td></tr>`;
             
             try {
-                const response = await fetch(`/tracking-stats?filter=${filter}&limit=200`);
+                const dateFrom = document.getElementById('tr-date-from')?.value || '';
+                const dateTo   = document.getElementById('tr-date-to')?.value   || '';
+                const sender   = document.getElementById('tr-sender-filter')?.value || '';
+
+                const url = `/tracking-stats?filter=${filter}&limit=500` +
+                    (dateFrom ? `&date_from=${dateFrom}` : '') +
+                    (dateTo   ? `&date_to=${dateTo}`     : '') +
+                    (sender   ? `&sender=${encodeURIComponent(sender)}` : '');
+
+                const response = await fetch(url);
                 const data = await response.json();
                 
                 // Update count cards
                 const sum = data.summary || {};
-                document.getElementById('tr-total').textContent = sum.total || 0;
-                document.getElementById('tr-opened').textContent = sum.opened || 0;
+                const total  = sum.total  || 0;
+                const opened = sum.opened || 0;
+                document.getElementById('tr-total').textContent   = total;
+                document.getElementById('tr-opened').textContent  = opened;
                 document.getElementById('tr-replied').textContent = sum.replied || 0;
-                document.getElementById('tr-48h').textContent = sum.not_opened_48h || 0;
+                document.getElementById('tr-48h').textContent     = sum.not_opened_48h || 0;
+                const openRate = total > 0 ? Math.round((opened / total) * 100) : 0;
+                document.getElementById('tr-open-rate').textContent = openRate + '%';
+                
+                // Load per-sender breakdown (with same date filters)
+                loadPerSenderBreakdown(dateFrom, dateTo);
                 
                 if (!data.emails || data.emails.length === 0) {
                     container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--muted);">No matching tracking data found.</td></tr>`;
@@ -1735,6 +1818,62 @@
                 container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--danger);">Error loading tracking data: ${err}</td></tr>`;
             }
         }
+
+        async function loadPerSenderBreakdown(dateFrom, dateTo) {
+            const tbody = document.getElementById('per-sender-table-body');
+            try {
+                let url = '/tracking-per-sender';
+                const params = [];
+                if (dateFrom) params.push('date_from=' + dateFrom);
+                if (dateTo)   params.push('date_to='   + dateTo);
+                if (params.length) url += '?' + params.join('&');
+                
+                const resp = await fetch(url);
+                const rows = await resp.json();
+                
+                if (!rows || rows.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:14px;color:var(--muted);">No data.</td></tr>`;
+                    return;
+                }
+                
+                tbody.innerHTML = rows.map(r => {
+                    const rate = r.total > 0 ? Math.round((r.opened / r.total) * 100) : 0;
+                    const rateColor = rate >= 30 ? 'var(--accent)' : rate >= 15 ? '#ca8a04' : 'var(--danger)';
+                    return `<tr>
+                        <td style="font-weight:600;">${r.sender_email}</td>
+                        <td style="text-align:center; font-weight:700;">${r.total}</td>
+                        <td style="text-align:center; color:#2563eb; font-weight:600;">${r.opened}</td>
+                        <td style="text-align:center; color:var(--accent); font-weight:600;">${r.replied}</td>
+                        <td style="text-align:center; color:var(--danger);">${r.not_opened_48h}</td>
+                        <td style="text-align:center; font-weight:700; color:${rateColor};">${rate}%</td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger);padding:14px;">Error loading breakdown.</td></tr>`;
+            }
+        }
+
+        function clearTrackingFilters() {
+            const df = document.getElementById('tr-date-from');
+            const dt = document.getElementById('tr-date-to');
+            const sf = document.getElementById('tr-sender-filter');
+            if (df) df.value = '';
+            if (dt) dt.value = '';
+            if (sf) sf.value = '';
+            loadTracking(currentFilter);
+        }
+
+        function downloadTracking() {
+            const dateFrom = document.getElementById('tr-date-from')?.value || '';
+            const dateTo   = document.getElementById('tr-date-to')?.value   || '';
+            const sender   = document.getElementById('tr-sender-filter')?.value || '';
+            let url = `/tracking-download?filter=${currentFilter}`;
+            if (dateFrom) url += `&date_from=${dateFrom}`;
+            if (dateTo)   url += `&date_to=${dateTo}`;
+            if (sender)   url += `&sender=${encodeURIComponent(sender)}`;
+            window.location.href = url;
+        }
+
 
         async function markAsReplied(id) {
             try {

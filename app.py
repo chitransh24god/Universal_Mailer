@@ -784,10 +784,14 @@ async def save_settings(request: Request):
     try:
         body = await request.json()
         for k, v in body.items():
+            val = str(v).strip()
+            # Sanitize tracking URL: strip query parameters and trailing slashes
+            if k == "tracking_base_url" and "?" in val:
+                val = val.split("?")[0].rstrip("/")
             execute_query("""
                 INSERT INTO global_settings (key, value) VALUES (%s, %s)
                 ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value;
-            """, [k, str(v).strip()])
+            """, [k, val])
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -1071,7 +1075,8 @@ async def api_analyze_template(request: Request):
 
 # Tracking & Logs Stats API
 @app.get("/tracking-stats")
-async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 100):
+async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200,
+                         date_from: str = "", date_to: str = ""):
     try:
         where = []
         params = []
@@ -1086,6 +1091,12 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 100
             where.append("se.opened=FALSE")
         elif filter == "alert_48h":
             where.append("se.alerted_48h=TRUE AND se.replied=FALSE")
+        if date_from:
+            where.append("DATE(se.sent_at) >= %s")
+            params.append(date_from)
+        if date_to:
+            where.append("DATE(se.sent_at) <= %s")
+            params.append(date_to)
             
         where_clause = ("WHERE " + " AND ".join(where)) if where else ""
         params.append(limit)
@@ -1099,14 +1110,28 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 100
             FROM sent_emails se {where_clause} ORDER BY se.sent_at DESC LIMIT %s;
         """, params, fetch="all")
         
-        summary = execute_query("""
+        # Summary with same date/sender filters but ignoring status filter
+        sum_where = []
+        sum_params = []
+        if sender:
+            sum_where.append("sender_email=%s")
+            sum_params.append(sender)
+        if date_from:
+            sum_where.append("DATE(sent_at) >= %s")
+            sum_params.append(date_from)
+        if date_to:
+            sum_where.append("DATE(sent_at) <= %s")
+            sum_params.append(date_to)
+        sum_where_clause = ("WHERE " + " AND ".join(sum_where)) if sum_where else ""
+        
+        summary = execute_query(f"""
             SELECT COUNT(*) AS total,
                    SUM(CASE WHEN opened = TRUE THEN 1 ELSE 0 END) AS opened,
                    SUM(CASE WHEN replied = TRUE THEN 1 ELSE 0 END) AS replied,
                    SUM(CASE WHEN opened = FALSE AND alerted_48h = TRUE THEN 1 ELSE 0 END) AS not_opened_48h,
                    SUM(CASE WHEN opened = FALSE AND sent_at > NOW()-INTERVAL '48h' THEN 1 ELSE 0 END) AS pending
-            FROM sent_emails;
-        """, fetch="one")
+            FROM sent_emails {sum_where_clause};
+        """, sum_params, fetch="one")
         
         # Handle SQLite aggregate queries returning None for SUM when no records exist
         if summary:
@@ -1131,6 +1156,94 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 100
         return JSONResponse({"summary": summary, "emails": result})
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/tracking-per-sender")
+async def tracking_per_sender(date_from: str = "", date_to: str = ""):
+    """Returns per-sender breakdown of sent/opened/replied counts."""
+    try:
+        where = []
+        params = []
+        if date_from:
+            where.append("DATE(sent_at) >= %s")
+            params.append(date_from)
+        if date_to:
+            where.append("DATE(sent_at) <= %s")
+            params.append(date_to)
+        where_clause = ("WHERE " + " AND ".join(where)) if where else ""
+        rows = execute_query(f"""
+            SELECT sender_email,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) AS opened,
+                   SUM(CASE WHEN replied=TRUE THEN 1 ELSE 0 END) AS replied,
+                   SUM(CASE WHEN opened=FALSE AND alerted_48h=TRUE THEN 1 ELSE 0 END) AS not_opened_48h
+            FROM sent_emails {where_clause}
+            GROUP BY sender_email ORDER BY total DESC;
+        """, params, fetch="all")
+        return JSONResponse(rows or [])
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/tracking-download")
+async def tracking_download(filter: str = "all", sender: str = "", date_from: str = "", date_to: str = ""):
+    """Download tracking data as a CSV file."""
+    import csv, io
+    from fastapi.responses import StreamingResponse
+    try:
+        where = []
+        params = []
+        if sender:
+            where.append("se.sender_email=%s")
+            params.append(sender)
+        if filter == "opened":
+            where.append("se.opened=TRUE AND se.replied=FALSE")
+        elif filter == "replied":
+            where.append("se.replied=TRUE")
+        elif filter == "not_opened":
+            where.append("se.opened=FALSE")
+        elif filter == "alert_48h":
+            where.append("se.alerted_48h=TRUE AND se.replied=FALSE")
+        if date_from:
+            where.append("DATE(se.sent_at) >= %s")
+            params.append(date_from)
+        if date_to:
+            where.append("DATE(se.sent_at) <= %s")
+            params.append(date_to)
+        where_clause = ("WHERE " + " AND ".join(where)) if where else ""
+
+        rows = execute_query(f"""
+            SELECT se.sender_email, se.to_email, se.company_name, se.owner_name,
+                   se.subject, se.sent_at, se.opened, se.opened_at, se.replied, se.replied_at,
+                   se.alerted_48h,
+                   (SELECT r.body_preview FROM replies r WHERE r.track_token=se.track_token
+                    ORDER BY r.received_at DESC LIMIT 1) AS reply_preview
+            FROM sent_emails se {where_clause} ORDER BY se.sent_at DESC LIMIT 10000;
+        """, params, fetch="all")
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Sender", "Recipient", "Company", "Owner", "Subject", "Sent At",
+                         "Opened", "Opened At", "Replied", "Replied At", "48h Alert", "Reply Preview"])
+        for r in (rows or []):
+            d = dict(r)
+            writer.writerow([
+                d.get("sender_email", ""), d.get("to_email", ""), d.get("company_name", ""),
+                d.get("owner_name", ""), d.get("subject", ""), d.get("sent_at", ""),
+                "Yes" if d.get("opened") else "No", d.get("opened_at", "") or "",
+                "Yes" if d.get("replied") else "No", d.get("replied_at", "") or "",
+                "Yes" if d.get("alerted_48h") else "No", d.get("reply_preview", "") or ""
+            ])
+
+        output.seek(0)
+        filename = f"email_tracking_{date_from or 'all'}_{date_to or 'all'}.csv"
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode("utf-8-sig")),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 
 @app.get("/replies-list")
 async def replies_list(limit: int = 50):
@@ -1194,6 +1307,11 @@ async def _launch_campaign(sender_email, category, file, base_url=""):
                 base_url = tracking_base
     except Exception as e:
         print(f"Error reading tracking_base_url settings: {e}")
+    
+    # Sanitize: strip any query parameters from the base URL
+    if '?' in base_url:
+        base_url = base_url.split('?')[0].rstrip('/')
+    print(f"[Campaign] Using tracking base URL: {base_url}")
         
     campaign_id = f"{sender_email}::{category}::{int(time.time())}"
     with campaigns_lock:
@@ -1280,6 +1398,18 @@ async def public_dashboard(pwd: str = ""):
 
 @app.get("/", response_class=HTMLResponse)
 async def root(pwd: str = ""):
+    # Fix: Catch malformed tracking pixel URLs like /?pwd=Mybankloan.ai/track/TOKEN
+    if "/track/" in pwd:
+        token = pwd.split("/track/", 1)[1].split("?")[0].split("&")[0]
+        if token:
+            try:
+                execute_query("UPDATE sent_emails SET opened=TRUE, opened_at=NOW() WHERE track_token=%s AND opened=FALSE;", [token])
+                print(f"[Track] Open recorded from malformed URL: token={token}")
+            except Exception as e:
+                print(f"[Track Error] {e}")
+            import base64
+            pixel = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
+            return Response(content=pixel, media_type="image/gif", headers={"Cache-Control": "no-cache,no-store"})
     if pwd != get_dashboard_password():
         return FileResponse("static/login.html")
     return FileResponse("static/index.html")
