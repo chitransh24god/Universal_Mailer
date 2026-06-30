@@ -670,6 +670,15 @@ def poll_replies():
                                 break
                                     
                         if matched_token:
+                            # Skip mailer-daemon bounces and auto-replies
+                            from_lower = from_email.lower()
+                            is_bounce = any(x in from_lower for x in [
+                                'mailer-daemon', 'noreply', 'no-reply', 'postmaster',
+                                'mail delivery', 'delivery subsystem'
+                            ])
+                            if is_bounce:
+                                continue
+
                             # Verify if we already have this reply saved
                             dup = execute_query("SELECT COUNT(*) as c FROM replies WHERE track_token = %s AND from_email = %s AND subject = %s;", [matched_token, from_email, subject], fetch="one")
                             if dup and dup["c"] > 0:
@@ -1246,18 +1255,46 @@ async def tracking_download(filter: str = "all", sender: str = "", date_from: st
 
 
 @app.get("/replies-list")
-async def replies_list(limit: int = 50):
+async def replies_list(limit: int = 200, include_bounces: bool = False):
     try:
-        rows = execute_query("""
+        bounce_filter = ""
+        if not include_bounces:
+            bounce_filter = """
+                AND LOWER(r.from_email) NOT LIKE '%mailer-daemon%'
+                AND LOWER(r.from_email) NOT LIKE '%noreply%'
+                AND LOWER(r.from_email) NOT LIKE '%no-reply%'
+                AND LOWER(r.from_email) NOT LIKE '%postmaster%'
+                AND LOWER(r.subject)    NOT LIKE '%delivery status notification%'
+                AND LOWER(r.subject)    NOT LIKE '%mail delivery%'
+            """
+        rows = execute_query(f"""
             SELECT r.id, r.from_email, r.subject, r.body_preview, r.received_at,
                    se.sender_email, se.to_email, se.company_name, se.owner_name, se.subject AS original_subject
             FROM replies r JOIN sent_emails se ON r.track_token=se.track_token
+            WHERE 1=1 {bounce_filter}
             ORDER BY r.received_at DESC LIMIT %s;
         """, [limit], fetch="all")
         result = [dict(r) for r in rows]
         for d in result:
             d["received_at"] = str(d["received_at"])
         return JSONResponse({"replies": result, "count": len(result)})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/update-imap-password")
+async def update_imap_password(request: Request):
+    """Update IMAP password for a sender account (for reply detection)."""
+    try:
+        body = await request.json()
+        email = body.get("email", "").strip()
+        password = body.get("imap_password", "").strip()
+        if not email or not password:
+            return JSONResponse(status_code=400, content={"error": "email and imap_password required"})
+        execute_query(
+            "UPDATE sender_accounts SET imap_password=%s WHERE email=%s;",
+            [password, email]
+        )
+        return JSONResponse({"ok": True, "message": f"IMAP password updated for {email}"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 

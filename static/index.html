@@ -1102,6 +1102,50 @@
                     </table>
                 </div>
             </div>
+
+            <!-- ── REPLIES INBOX ── -->
+            <div class="card" style="margin-top:20px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <div class="card-title" style="margin-bottom:0;">&#128236; Replies Inbox</div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;">
+                            <input type="checkbox" id="show-bounces-chk" onchange="loadReplies()">
+                            Show bounces
+                        </label>
+                        <button class="btn btn-secondary btn-sm" onclick="loadReplies()">&#8635; Refresh</button>
+                    </div>
+                </div>
+                <div id="replies-inbox-container">
+                    <div style="text-align:center;color:var(--muted);padding:24px;font-size:13px;">Loading replies...</div>
+                </div>
+            </div>
+
+            <!-- ── IMAP PASSWORD SETUP ── -->
+            <div class="card" style="margin-top:20px;">
+                <div class="card-title">&#128295; Enable Reply Detection for @mybankloan.ai Accounts</div>
+                <div style="background:rgba(234,179,8,0.07);border:1px solid rgba(234,179,8,0.25);border-radius:var(--r);padding:14px;font-size:13px;color:#92400e;margin-bottom:16px;line-height:1.6;">
+                    &#9888; <strong>IMAP password is required</strong> for admin@, cayagya@, bl@, invest@mybankloan.ai to detect replies.
+                    Enter the same password you use to log in at <strong>mail.mybankloan.ai</strong> webmail.
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end;">
+                    <div class="field" style="margin-bottom:0;">
+                        <label>Sender Account</label>
+                        <select id="imap-pwd-email">
+                            <option value="admin@mybankloan.ai">admin@mybankloan.ai</option>
+                            <option value="cayagya@mybankloan.ai">cayagya@mybankloan.ai</option>
+                            <option value="bl@mybankloan.ai">bl@mybankloan.ai</option>
+                            <option value="invest@mybankloan.ai">invest@mybankloan.ai</option>
+                        </select>
+                    </div>
+                    <div class="field" style="margin-bottom:0;">
+                        <label>Email Hosting Password (IMAP)</label>
+                        <input type="password" id="imap-pwd-value" placeholder="Your webmail password">
+                    </div>
+                </div>
+                <button class="btn" style="margin-top:12px;" onclick="saveImapPassword()">&#128190; Save IMAP Password</button>
+                <div id="imap-pwd-status" style="margin-top:10px;font-size:13px;"></div>
+            </div>
+
         </div>
 
         <!-- ── TAB 6: SETTINGS PANEL ────────────────────────────────────────── -->
@@ -1298,7 +1342,9 @@
                 loadDraftSelect();
             } else if (tabName === 'tracking') {
                 loadTracking('all');
+                loadReplies();
                 loadGlobalSettings();
+
             } else if (tabName === 'settings') {
                 loadSettingsData();
             }
@@ -1872,6 +1918,79 @@
             if (dateTo)   url += `&date_to=${dateTo}`;
             if (sender)   url += `&sender=${encodeURIComponent(sender)}`;
             window.location.href = url;
+        }
+
+        async function loadReplies() {
+            const container = document.getElementById('replies-inbox-container');
+            if (!container) return;
+            const includeBounces = document.getElementById('show-bounces-chk')?.checked ? 'true' : 'false';
+            container.innerHTML = `<div style="text-align:center;color:var(--muted);padding:24px;font-size:13px;">Loading replies...</div>`;
+            try {
+                const resp = await fetch(`/replies-list?limit=200&include_bounces=${includeBounces}`);
+                const data = await resp.json();
+                const replies = data.replies || [];
+                if (replies.length === 0) {
+                    container.innerHTML = `<div style="text-align:center;color:var(--muted);padding:30px;font-size:13px;">
+                        No real replies found yet.<br>
+                        <span style="font-size:12px;opacity:.7;">Reply detection runs every 60 seconds. Make sure IMAP passwords are saved below.</span>
+                    </div>`;
+                    return;
+                }
+                container.innerHTML = `
+                <div style="overflow-x:auto;">
+                <table class="track-table" style="font-size:13px;">
+                    <thead><tr>
+                        <th>From</th>
+                        <th>Subject</th>
+                        <th>Sent To</th>
+                        <th>Sender Account</th>
+                        <th>Received</th>
+                        <th>Reply Preview</th>
+                    </tr></thead>
+                    <tbody>
+                    ${replies.map(r => `
+                        <tr>
+                            <td style="font-weight:600;color:var(--accent);">${r.from_email}</td>
+                            <td>${r.subject || '—'}</td>
+                            <td style="font-size:12px;color:var(--muted);">${r.to_email || r.company_name || '—'}</td>
+                            <td style="font-size:12px;color:var(--hint);">${r.sender_email || '—'}</td>
+                            <td style="font-size:12px;color:var(--muted);">${(r.received_at||'').split('.')[0]}</td>
+                            <td style="font-size:12px;color:var(--muted);max-width:280px;word-break:break-word;">${(r.body_preview||'').substring(0,180)}${r.body_preview && r.body_preview.length>180 ? '...' : ''}</td>
+                        </tr>
+                    `).join('')}
+                    </tbody>
+                </table>
+                </div>`;
+            } catch (err) {
+                container.innerHTML = `<div style="color:var(--danger);padding:16px;font-size:13px;">Error loading replies: ${err}</div>`;
+            }
+        }
+
+        async function saveImapPassword() {
+            const email = document.getElementById('imap-pwd-email').value;
+            const password = document.getElementById('imap-pwd-value').value.trim();
+            const status = document.getElementById('imap-pwd-status');
+            if (!password) { status.textContent = 'Please enter a password.'; status.style.color = 'var(--danger)'; return; }
+            status.textContent = 'Saving...'; status.style.color = 'var(--muted)';
+            try {
+                const resp = await fetch('/api/update-imap-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, imap_password: password })
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    status.textContent = `✅ IMAP password saved for ${email}. Reply detection will activate within 60 seconds.`;
+                    status.style.color = 'var(--accent)';
+                    document.getElementById('imap-pwd-value').value = '';
+                } else {
+                    status.textContent = 'Error: ' + (data.error || 'Unknown error');
+                    status.style.color = 'var(--danger)';
+                }
+            } catch (err) {
+                status.textContent = 'Connection error: ' + err;
+                status.style.color = 'var(--danger)';
+            }
         }
 
 
