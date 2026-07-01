@@ -1284,7 +1284,12 @@ async def replies_list(limit: int = 200, include_bounces: bool = False):
         return JSONResponse(status_code=500, content={"error": str(e), "traceback": traceback.format_exc()})
 
 
+@app.get("/test-version")
+async def test_version():
+    return {"version": "version-traceback-v1"}
+
 @app.post("/api/update-imap-password")
+
 async def update_imap_password(request: Request):
     """Update IMAP password for a sender account (for reply detection)."""
     try:
