@@ -264,28 +264,26 @@ def seed_defaults():
         (
             "Electronics Policy",
             "Gujarat Electronics Policy 2022-28",
-            """Dear Sir/Madam,
+            """Dear {Owner Name},
 
-Greetings from VSD Finserv Pvt. Ltd., Ahmedabad.
+Greetings from VSD Finserv Pvt. Ltd.
 
-We are personally writing to you as we believe your organization may be eligible for financial incentives under the Gujarat Electronics Policy 2022-28.
+From our knowledge about {Company Name}, we understand that you are engaged in Electronics manufacturing activity and may be eligible for various incentives under the Gujarat Electronics Policy 2022-28, including:
 
-The key benefits include:
-
-- 20% CAPEX Subsidy
-- 7% Interest Subsidy
-- Rs.1 per Unit Power Tariff Subsidy
-- 100% Electricity Duty Exemption
-- 100% EPF Reimbursement for Female Employees and 75% for Male Employees
-- 100% Stamp Duty Reimbursement
+• 20% CAPEX Subsidy
+• 7% Interest Subsidy
+• Rs.1 per Unit Power Tariff Subsidy
+• 100% Electricity Duty Exemption
+• 100% EPF Reimbursement for Female Employees and 75% for Male Employees
+• 100% Stamp Duty Reimbursement
 
 VSD Finserv Pvt. Ltd. provides end-to-end assistance in evaluating, applying for, and availing incentives under various State Government policies. Each case is personally monitored by our Director.
+We would be pleased to connect at a convenient time to discuss the applicability of these incentives for your organization. Kindly feel free to reach out to us via email or phone at your convenience.
 
-We would be glad to connect with you at your convenience. Please feel free to reach out via email or phone.
+CA Yagya Sharda - 9978480401
 
 Warm Regards,
-VSD Finserv Pvt. Ltd.
-Ahmedabad"""
+Jenil Koshti"""
         ),
         (
             "IT Policy",
