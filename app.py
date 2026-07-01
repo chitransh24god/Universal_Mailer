@@ -1280,7 +1280,9 @@ async def replies_list(limit: int = 200, include_bounces: bool = False):
             d["received_at"] = str(d["received_at"])
         return JSONResponse({"replies": result, "count": len(result)})
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        import traceback
+        return JSONResponse(status_code=500, content={"error": str(e), "traceback": traceback.format_exc()})
+
 
 @app.post("/api/update-imap-password")
 async def update_imap_password(request: Request):
