@@ -626,20 +626,7 @@ VSD Finserv Pvt. Ltd."""
             INSERT INTO sender_accounts 
             (email, display_name, provider_type, api_key, smtp_host, smtp_port, smtp_username, smtp_password, imap_host, imap_port, imap_password, daily_limit, delay_min, delay_max)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (email) DO UPDATE SET
-                display_name=EXCLUDED.display_name,
-                provider_type=EXCLUDED.provider_type,
-                api_key=EXCLUDED.api_key,
-                smtp_host=EXCLUDED.smtp_host,
-                smtp_port=EXCLUDED.smtp_port,
-                smtp_username=EXCLUDED.smtp_username,
-                smtp_password=EXCLUDED.smtp_password,
-                imap_host=EXCLUDED.imap_host,
-                imap_port=EXCLUDED.imap_port,
-                imap_password=EXCLUDED.imap_password,
-                daily_limit=EXCLUDED.daily_limit,
-                delay_min=EXCLUDED.delay_min,
-                delay_max=EXCLUDED.delay_max;
+            ON CONFLICT (email) DO NOTHING;
         """, [
             snd["email"], snd["display_name"], snd["provider_type"], snd["api_key"],
             snd.get("smtp_host"), snd.get("smtp_port"), snd.get("smtp_username"), snd.get("smtp_password"),
@@ -652,8 +639,9 @@ VSD Finserv Pvt. Ltd."""
         execute_query("""
             INSERT INTO email_templates (category, subject, body_text)
             VALUES (%s, %s, %s)
-            ON CONFLICT (category) DO UPDATE SET subject=EXCLUDED.subject, body_text=EXCLUDED.body_text;
+            ON CONFLICT (category) DO NOTHING;
         """, [cat, subj, body])
+
         
     # Insert Maps
     for sender, cats in DEFAULT_SENDER_TEMPLATES.items():
