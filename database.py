@@ -37,7 +37,9 @@ def execute_query(query, params=None, fetch=None, commit=True):
         if is_sqlite:
             # SQLite uses '?' placeholder instead of '%s'
             query = query.replace("%s", "?")
+            query = query.replace("%%", "%")
             # Replace SERIAL with INTEGER PRIMARY KEY AUTOINCREMENT in table creations
+
             query = query.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
             # Replace String aggregation functions
             query = query.replace("STRING_AGG(stm.sender_email,', ' ORDER BY stm.sender_email)", "GROUP_CONCAT(stm.sender_email, ', ')")

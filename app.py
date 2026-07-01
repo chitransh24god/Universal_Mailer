@@ -1260,13 +1260,14 @@ async def replies_list(limit: int = 200, include_bounces: bool = False):
         bounce_filter = ""
         if not include_bounces:
             bounce_filter = """
-                AND LOWER(r.from_email) NOT LIKE '%mailer-daemon%'
-                AND LOWER(r.from_email) NOT LIKE '%noreply%'
-                AND LOWER(r.from_email) NOT LIKE '%no-reply%'
-                AND LOWER(r.from_email) NOT LIKE '%postmaster%'
-                AND LOWER(r.subject)    NOT LIKE '%delivery status notification%'
-                AND LOWER(r.subject)    NOT LIKE '%mail delivery%'
+                AND LOWER(r.from_email) NOT LIKE '%%mailer-daemon%%'
+                AND LOWER(r.from_email) NOT LIKE '%%noreply%%'
+                AND LOWER(r.from_email) NOT LIKE '%%no-reply%%'
+                AND LOWER(r.from_email) NOT LIKE '%%postmaster%%'
+                AND LOWER(r.subject)    NOT LIKE '%%delivery status notification%%'
+                AND LOWER(r.subject)    NOT LIKE '%%mail delivery%%'
             """
+
         rows = execute_query(f"""
             SELECT r.id, r.from_email, r.subject, r.body_preview, r.received_at,
                    se.sender_email, se.to_email, se.company_name, se.owner_name, se.subject AS original_subject
