@@ -474,30 +474,30 @@ VSD Group"""
         ),
         (
             "Vikshit Bharat",
-            "State support programs for {Company Name}",
-            """Dear {Owner Name},
+            "Incentives for {Company Name}",
+            """Dear Sir,
 
-I hope you are doing well.
+Greetings from VSD Finserv Pvt. Ltd.
 
-Based on our initial review, we understand that {Company Name} is engaged in manufacturing activities and may qualify for financial incentives under the Viksit Gujarat Industrial Policy.
+From our knowledge about {Company Name}, we understand that you are engaged in manufacturing activity and may be eligible for various incentives under the Viksit Gujarat Industrial Policy 2026, including:
 
-The active incentives include:
-- Up to 35% capital support on eligible fixed assets (Category A locations).
-- Up to 25% capital support on eligible fixed assets (Category B locations).
-- Up to 7% term financing support.
-- Unit power tariff concessions (ranging from 1 to 2 per unit).
-- Complete employer EPF reimbursement for qualifying workforce.
-- Electricity duty exemptions.
-- Reimbursement of stamp duty and registration charges.
+• Up to 35% Capital Subsidy on Eligible Fixed Asset (Category A locations)
+• Up to 25% Capital Subsidy on Eligible Fixed Asset (Category B locations)
+• Up to 7% Interest Subsidy
+• Unit Power Tariff Concessions (Ranging from 1 to 2 per unit)
+• Complete Employer EPF Reimbursement for Qualifying Workforce
+• Electricity Duty Exemptions
+• Reimbursement of Stamp Duty and Registration Charges
 
 VSD Finserv Pvt. Ltd. provides complete support in evaluating your eligibility, preparing application materials, and managing the approval process.
 
-Would you be open to a brief call this week to check what benefits {Company Name} is eligible for?
+We would be pleased to connect at a convenient time to discuss the applicability of these incentives for your organization. Kindly feel free to reach out to us via email or phone at your convenience.
+
+CA Yagya Sharda : 9978480401
 
 Warm regards,
 Anand Rajput
-VSD Finserv Pvt. Ltd.
-99784 80401"""
+VSD Finserv Pvt. Ltd."""
         ),
     ]
     # 2. Seed Senders
