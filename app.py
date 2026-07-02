@@ -331,12 +331,21 @@ def make_html_body(plain_text):
 def make_html_body_tracked(plain_text, track_token, base_url=""):
     if not base_url:
         base_url = os.environ.get("BASE_URL", "https://universal-mailer.onrender.com")
+    base_url = base_url.strip().rstrip('/')
+    
+    # Convert relative static paths to absolute URLs so they load in email clients
+    plain_text = plain_text.replace('src="/static/', f'src="{base_url}/static/')
+    plain_text = plain_text.replace("src='/static/", f"src='{base_url}/static/")
+    plain_text = plain_text.replace('src="static/', f'src="{base_url}/static/')
+    plain_text = plain_text.replace("src='static/", f"src='{base_url}/static/")
+    
     body = make_html_body(plain_text)
     pixel = (
         f'<img src="{base_url}/track/{track_token}" '
         f'width="1" height="1" style="display:none;" alt="" />'
     )
     return body.replace('</body>', pixel + '</body>')
+
 
 # ── Custom SMTP Sending ────────────────────────────────────────────────────────
 def send_via_custom_smtp(to_email, subject, html_body, plain_body, sender_email, sender_name, config, retries=2):
