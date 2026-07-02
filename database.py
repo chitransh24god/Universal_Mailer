@@ -524,8 +524,7 @@ VSD Finserv Pvt. Ltd."""
             "display_name": "VSD Finserv Pvt. Ltd.",
             "provider_type": "brevo",
             "api_key": os.environ.get("BREVO_API_KEY_3") or _get_key("2806a49247bd0fffa44cd3b0e941f7e253986b6f43edc2a44c8394bf034ddb2e", "U1r3N93VewIPQsiD"),
-            "imap_host": "mail.mybankloan.ai",
-
+            "imap_host": "imap.mybankloan.ai",
             "imap_port": 993,
             "imap_password": os.environ.get("IMAP_PASS_ADMIN", ""),
             "daily_limit": 1500,
@@ -537,7 +536,7 @@ VSD Finserv Pvt. Ltd."""
             "display_name": "VSD Finserv Pvt. Ltd.",
             "provider_type": "brevo",
             "api_key": os.environ.get("BREVO_API_KEY") or _get_key("41922f5c8dce3cdbf7d907324aa2a3f8972eaa35310ba2c65703fda5f9014922", "TqOFxd6dzLAWAlD4"),
-            "imap_host": "mail.mybankloan.ai",
+            "imap_host": "imap.mybankloan.ai",
             "imap_port": 993,
             "imap_password": os.environ.get("IMAP_PASS_CAYAGYA", ""),
             "daily_limit": 1500,
@@ -549,7 +548,7 @@ VSD Finserv Pvt. Ltd."""
             "display_name": "Business Loan - VSD Finserv",
             "provider_type": "brevo",
             "api_key": os.environ.get("BREVO_API_KEY_2") or _get_key("41922f5c8dce3cdbf7d907324aa2a3f8972eaa35310ba2c65703fda5f9014922", "TqOFxd6dzLAWAlD4"),
-            "imap_host": "mail.mybankloan.ai",
+            "imap_host": "imap.mybankloan.ai",
             "imap_port": 993,
             "imap_password": os.environ.get("IMAP_PASS_BL", ""),
             "daily_limit": 1500,
@@ -561,13 +560,14 @@ VSD Finserv Pvt. Ltd."""
             "display_name": "VSD Finserv - Investment",
             "provider_type": "brevo",
             "api_key": os.environ.get("BREVO_API_KEY_4") or _get_key("098d5761b815663f23cc2bb1ad8c09a53593d80be8e2aa63bbec3c7b0c230a95", "5tfErX73oFMi1FSR"),
-            "imap_host": "us2.imapserver.mailhostbox.com",
+            "imap_host": "imap.mybankloan.ai",
             "imap_port": 993,
             "imap_password": os.environ.get("IMAP_PASS_INVEST", ""),
             "daily_limit": 1500,
             "delay_min": 60,
             "delay_max": 120
         },
+
         {
             "email": "vsdgroups2013@gmail.com",
             "display_name": "VSD Group",
@@ -666,6 +666,13 @@ VSD Finserv Pvt. Ltd."""
                 INSERT INTO sender_template_map (sender_email, category)
                 VALUES (%s, %s) ON CONFLICT DO NOTHING;
             """, [sender, cat])
+
+    # Migrate/correct existing IMAP hosts in database
+    try:
+        execute_query("UPDATE sender_accounts SET imap_host='imap.mybankloan.ai' WHERE imap_host IN ('mail.mybankloan.ai', 'us2.imapserver.mailhostbox.com');")
+        print("[DB Migration] Corrected IMAP hosts to imap.mybankloan.ai")
+    except Exception as me:
+        print(f"[DB Migration Error] Failed to migrate IMAP hosts: {me}")
 
 if __name__ == "__main__":
     init_db()
