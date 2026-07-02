@@ -294,20 +294,25 @@ def personalize_body(template_text, email_subject, row_dict):
     return body + footer, subject
 
 def make_html_body(plain_text):
-    import html as _html
-    lines = plain_text.split('\n')
+    import re
+    text = plain_text
+    # Convert markdown formatting
+    text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
+    text = re.sub(r'\*(.*?)\*', r'<em>\1</em>', text)
+    
+    lines = text.split('\n')
     html_lines = []
     for line in lines:
         s = line.strip()
-        e = _html.escape(s)
         if s == '':
             html_lines.append('<div style="height:8px;"></div>')
-        elif s.startswith('- '):
-            html_lines.append(f"<div style='margin:4px 0 4px 16px;'><span style='color:#444;'>&#8226;</span>&nbsp;{e[2:].strip()}</div>")
+        elif s.startswith('- ') or s.startswith('• '):
+            bullet_content = s[2:].strip()
+            html_lines.append(f"<div style='margin:4px 0 4px 16px;'><span style='color:#444;'>&#8226;</span>&nbsp;{bullet_content}</div>")
         elif all(c == '-' for c in s) and len(s) > 3:
             html_lines.append("<div style='border-top:1px solid #d0d0d0;margin:12px 0;'></div>")
         else:
-            html_lines.append(f"<div style='margin:3px 0;'>{e}</div>")
+            html_lines.append(f"<div style='margin:3px 0;'>{line}</div>")
     return (
         '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1.0">'
@@ -321,6 +326,7 @@ def make_html_body(plain_text):
         + "\n".join(html_lines) +
         '</div></td></tr></table></td></tr></table></body></html>'
     )
+
 
 def make_html_body_tracked(plain_text, track_token, base_url=""):
     if not base_url:
@@ -620,9 +626,12 @@ def poll_replies():
             socket.setdefaulttimeout(15)
             print(f"[IMAP] Connecting {sender_email} -> {imap_host}:{imap_port}")
             
-            mail = imaplib.IMAP4_SSL(imap_host, int(imap_port))
+            import ssl
+            context = ssl._create_unverified_context()
+            mail = imaplib.IMAP4_SSL(imap_host, int(imap_port), ssl_context=context)
             mail.login(sender_email, imap_pass)
             socket.setdefaulttimeout(old_to)
+
             
             mail.select("INBOX")
             
@@ -710,6 +719,91 @@ def check_48hr_alerts():
     except Exception as e:
         print(f"[48hr error] {e}")
 
+def run_scheduled_campaign_thread(sc_id, sender_email, category, filepath):
+    try:
+        base_url = ""
+        try:
+            row = execute_query("SELECT value FROM global_settings WHERE key='tracking_base_url';", fetch="one")
+            if row and row["value"]:
+                base_url = row["value"].strip().rstrip('/')
+            else:
+                tracking_base = os.environ.get("TRACKING_BASE_URL", "").rstrip('/')
+                if tracking_base:
+                    base_url = tracking_base
+        except Exception as e:
+            print(f"Error reading tracking_base_url: {e}")
+            
+        if '?' in base_url:
+            base_url = base_url.split('?')[0].rstrip('/')
+            
+        campaign_id = f"{sender_email}::{category}::{int(time.time())}"
+        
+        with open(filepath, 'rb') as f:
+            file_bytes = f.read()
+            
+        df, email_col = smart_parse_excel(file_bytes)
+        df = df[df["Email"].notna() & (df["Email"] != "") & (df["Email"].str.lower() != "nan")]
+        df = df[df["Email"].str.contains("@", na=False)].reset_index(drop=True)
+        
+        if df.empty:
+            execute_query("UPDATE scheduled_campaigns SET status = 'failed' WHERE id = %s;", [sc_id])
+            return
+            
+        result = execute_query("SELECT subject, body_text FROM email_templates WHERE category=%s;", [category], fetch="one")
+        if not result:
+            execute_query("UPDATE scheduled_campaigns SET status = 'failed' WHERE id = %s;", [sc_id])
+            return
+            
+        email_subject, template_text = result["subject"], result["body_text"]
+        
+        sender_details = execute_query("SELECT display_name FROM sender_accounts WHERE email = %s;", [sender_email], fetch="one")
+        sender_name = sender_details["display_name"] if sender_details else "VSD Finserv"
+        
+        # Run campaign in background
+        run_campaign(df.to_dict(orient="list"), email_subject, template_text, "Email", sender_email, sender_name, campaign_id, category, base_url)
+        
+        execute_query("UPDATE scheduled_campaigns SET status = 'completed' WHERE id = %s;", [sc_id])
+    except Exception as e:
+        print(f"[Scheduled Campaign {sc_id} Run Error] {e}")
+        execute_query("UPDATE scheduled_campaigns SET status = 'failed' WHERE id = %s;", [sc_id])
+
+def check_scheduled_campaigns():
+    try:
+        from datetime import datetime
+        import pytz
+        utc_now = datetime.now(pytz.utc)
+        
+        # Fetch pending triggers that are due
+        rows = execute_query("""
+            SELECT id, sender_email, category, excel_filename, scheduled_time
+            FROM scheduled_campaigns
+            WHERE status = 'pending' AND scheduled_time <= %s;
+        """, [utc_now], fetch="all")
+        
+        for r in (rows or []):
+            sc_id = r["id"]
+            sender = r["sender_email"]
+            category = r["category"]
+            filename = r["excel_filename"]
+            
+            filepath = os.path.join("static", "scheduled_files", filename)
+            if not os.path.exists(filepath):
+                print(f"[Scheduled] File not found: {filepath}")
+                execute_query("UPDATE scheduled_campaigns SET status = 'failed' WHERE id = %s;", [sc_id])
+                continue
+                
+            execute_query("UPDATE scheduled_campaigns SET status = 'running' WHERE id = %s;", [sc_id])
+            print(f"[Scheduled] Triggering campaign {sc_id} for {sender} - {category}")
+            
+            t = threading.Thread(
+                target=run_scheduled_campaign_thread,
+                args=(sc_id, sender, category, filepath),
+                daemon=True
+            )
+            t.start()
+    except Exception as e:
+        print(f"[Scheduled Poller Error] {e}")
+
 def background_tracker():
     while True:
         try:
@@ -720,7 +814,12 @@ def background_tracker():
             check_48hr_alerts()
         except Exception as e:
             print(f"[48hr alert error] {e}")
-        time.sleep(60)
+        try:
+            check_scheduled_campaigns()
+        except Exception as e:
+            print(f"[Scheduler error] {e}")
+        time.sleep(30)
+
 
 @app.on_event("startup")
 async def startup():
@@ -1408,8 +1507,47 @@ async def send_emails_public(request: Request, pwd: str = Form(...), sender_emai
                         f'Campaign launched from <strong>{sender_email}</strong> — {count} emails! Redirecting...</body></html>')
 
 @app.post("/send-emails/")
-async def send_emails(request: Request, sender_email: str = Form(...), category: str = Form(...), file: UploadFile = File(...)):
+async def send_emails(request: Request, sender_email: str = Form(...), category: str = Form(...),
+                       file: UploadFile = File(...), is_scheduled: str = Form(None),
+                       scheduled_date: str = Form(None), scheduled_time: str = Form(None)):
     base_url = str(request.base_url).rstrip('/')
+    
+    if is_scheduled == "true" or is_scheduled is True or is_scheduled == "on":
+        if not scheduled_date or not scheduled_time:
+            return JSONResponse(status_code=400, content={"status": "error", "message": "Trigger Date and Time are required for scheduled campaigns."})
+        try:
+            # Parse trigger date/time in Indian Standard Time (IST)
+            import pytz
+            from datetime import datetime
+            ist = pytz.timezone('Asia/Kolkata')
+            naive_dt = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M")
+            local_dt = ist.localize(naive_dt)
+            utc_dt = local_dt.astimezone(pytz.utc)
+            
+            # Save Excel file to static/scheduled_files
+            os.makedirs("static/scheduled_files", exist_ok=True)
+            file_content = await file.read()
+            filename = f"{int(time.time())}_{file.filename.replace(' ', '_')}"
+            filepath = os.path.join("static", "scheduled_files", filename)
+            with open(filepath, "wb") as f:
+                f.write(file_content)
+                
+            # Insert into database
+            execute_query("""
+                INSERT INTO scheduled_campaigns (sender_email, category, excel_filename, scheduled_time, status)
+                VALUES (%s, %s, %s, %s, 'pending');
+            """, [sender_email, category, filename, utc_dt])
+            
+            return HTMLResponse(f'<html><head><meta http-equiv="refresh" content="4;url=/"></head>'
+                                f'<body style="font-family:sans-serif;background:#f5f4f0;color:#1e3a8a;padding:40px;text-align:center;font-size:16px;">'
+                                f'✅ Campaign scheduled successfully!<br><br>'
+                                f'Sender: <b>{sender_email}</b><br>'
+                                f'Trigger Time: <b>{scheduled_date} {scheduled_time} (IST)</b><br><br>'
+                                f'Redirecting to dashboard...</body></html>')
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"status": "error", "message": f"Scheduling failed: {e}"})
+            
+    # Launch campaign immediately
     count, err = await _launch_campaign(sender_email, category, file, base_url)
     if err:
         return JSONResponse(status_code=400, content={"status": "error", "message": err})
@@ -1417,7 +1555,49 @@ async def send_emails(request: Request, sender_email: str = Form(...), category:
                         f'<body style="font-family:sans-serif;background:#f5f4f0;color:#4a6741;padding:40px;text-align:center;font-size:16px;">'
                         f'Campaign launched from <b>{sender_email}</b> — {count} emails!</body></html>')
 
+@app.post("/api/upload-image")
+async def upload_image(file: UploadFile = File(...)):
+    try:
+        os.makedirs("static/uploads", exist_ok=True)
+        filename = f"{int(time.time())}_{file.filename.replace(' ', '_')}"
+        filepath = os.path.join("static", "uploads", filename)
+        with open(filepath, "wb") as f:
+            f.write(await file.read())
+        return JSONResponse({"ok": True, "url": f"/static/uploads/{filename}"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/api/scheduled-campaigns")
+async def get_scheduled_campaigns():
+    try:
+        rows = execute_query("""
+            SELECT id, sender_email, category, scheduled_time, status, created_at
+            FROM scheduled_campaigns
+            WHERE status = 'pending'
+            ORDER BY scheduled_time ASC;
+        """, fetch="all")
+        result = [dict(r) for r in rows]
+        for d in result:
+            d["scheduled_time"] = str(d["scheduled_time"])
+            d["created_at"] = str(d["created_at"])
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/scheduled-campaigns/cancel")
+async def cancel_scheduled_campaign(request: Request):
+    try:
+        body = await request.json()
+        sc_id = body.get("id")
+        if not sc_id:
+            return JSONResponse(status_code=400, content={"error": "id required"})
+        execute_query("UPDATE scheduled_campaigns SET status = 'cancelled' WHERE id = %s;", [sc_id])
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 @app.post("/api/campaigns/cancel")
+
 async def cancel_campaign(request: Request):
     try:
         body = await request.json()

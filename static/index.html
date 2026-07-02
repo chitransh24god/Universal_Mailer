@@ -867,11 +867,33 @@
                             <label>Excel File (.xlsx)</label>
                             <input type="file" name="file" accept=".xlsx,.xls" required>
                         </div>
-                        <button type="submit" class="btn btn-primary" style="margin-top: 10px;">
+                        
+                        <div style="margin: 12px 0 6px 0;">
+                            <label style="display:flex; align-items:center; gap:8px; font-weight:600; cursor:pointer; font-size:13px; user-select:none;">
+                                <input type="checkbox" id="chk-schedule" name="is_scheduled" value="true" onchange="toggleScheduleBlock()">
+                                🕒 Set Trigger / Schedule Campaign
+                            </label>
+                        </div>
+                        
+                        <div id="schedule-block" style="display:none; padding:12px; background:var(--surface-lt); border:1px solid var(--border); border-radius:var(--r); margin-bottom:12px;">
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                                <div class="field" style="margin-bottom:0;">
+                                    <label style="font-size:11px;">Trigger Date</label>
+                                    <input type="date" id="sched-date" name="scheduled_date">
+                                </div>
+                                <div class="field" style="margin-bottom:0;">
+                                    <label style="font-size:11px;">Trigger Time</label>
+                                    <input type="time" id="sched-time" name="scheduled_time">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary" style="margin-top: 10px; width:100%;">
                             <svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-                            Start Bulk Campaign
+                            Start / Schedule Campaign
                         </button>
                     </form>
+
                 </div>
                 <div class="card">
                     <div class="card-title">Campaign Rules</div>
@@ -907,9 +929,18 @@
                             <input type="text" id="tmpl-subject" placeholder="Email subject line..." oninput="queueAnalysis()">
                         </div>
                         <div class="field">
-                            <label>Email Body (Plain Text)</label>
-                            <textarea id="tmpl-body" placeholder="Dear {Owner Name}, from {Company Name}..." oninput="queueAnalysis()"></textarea>
+                            <label>Email Body (Rich HTML / Plain Text)</label>
+                            <div style="display:flex; gap:6px; margin-bottom:6px; background:var(--surface-lt); border:1px solid var(--border); padding:6px; border-radius:6px 6px 0 0; border-bottom:none; flex-wrap:wrap;">
+                                <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-weight:bold; font-size:11px;" onclick="insertTextAtCursor('tmpl-body', '<b>', '</b>')">B</button>
+                                <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-style:italic; font-size:11px;" onclick="insertTextAtCursor('tmpl-body', '<i>', '</i>')">I</button>
+                                <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; text-decoration:underline; font-size:11px;" onclick="insertTextAtCursor('tmpl-body', '<u>', '</u>')">U</button>
+                                <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="insertTextAtCursor('tmpl-body', '<br>')">Line Break</button>
+                                <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="triggerImageUpload()">🖼️ Attach Image</button>
+                                <input type="file" id="tmpl-image-file" style="display:none;" accept="image/*" onchange="uploadTemplateImage()">
+                            </div>
+                            <textarea id="tmpl-body" placeholder="Dear {Owner Name}, from {Company Name}..." oninput="queueAnalysis()" style="border-radius:0 0 var(--r) var(--r);"></textarea>
                         </div>
+
                         <div style="display:flex; gap:10px;">
                             <button class="btn btn-primary" onclick="saveTemplate()" style="flex-grow:1;">Save Template</button>
                             <button class="btn btn-secondary" onclick="deleteTemplate()" id="btn-tmpl-delete" style="display:none; color:var(--danger);">Delete</button>
@@ -985,7 +1016,13 @@
                     <div class="monitor-senders-list" id="monitor-campaigns-list">
                         <div style="color:var(--muted); font-size:13px;">No active runs.</div>
                     </div>
+                    
+                    <div class="card-title" style="margin-top:24px; border-top:1px solid var(--border); padding-top:16px;">Upcoming Scheduled Triggers</div>
+                    <div id="scheduled-triggers-list" style="font-size:13px; color:var(--muted); max-height:220px; overflow-y:auto; padding-right:4px;">
+                        <div style="color:var(--muted); font-size:13px; text-align:center; padding:12px;">No upcoming triggers.</div>
+                    </div>
                 </div>
+
                 <div class="card">
                     <div class="card-title">Real-time Activity Log</div>
                     <div class="log-box" id="monitor-logs">Waiting for log updates...</div>
@@ -1502,10 +1539,14 @@
                     logsBox.innerHTML = logsHtml || 'No activity.';
                     logsBox.scrollTop = logsBox.scrollHeight;
                 }
+                
+                // Fetch scheduled triggers list in monitor
+                loadScheduledCampaigns();
             } catch (err) {
                 console.error("Poller error:", err);
             }
         }
+
 
         async function cancelCampaign(campaignId) {
             if (!confirm("Are you sure you want to cancel this campaign?")) return;
@@ -2286,10 +2327,137 @@
             }
         }
 
+        // Rich Formatting Toolbar Helpers
+        function insertTextAtCursor(elId, startTag, endTag = '') {
+            const textarea = document.getElementById(elId);
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+            const selected = text.substring(start, end);
+            const replacement = startTag + selected + endTag;
+            textarea.value = text.substring(0, start) + replacement + text.substring(end);
+            textarea.focus();
+            textarea.selectionStart = start + startTag.length;
+            textarea.selectionEnd = start + startTag.length + selected.length;
+            queueAnalysis();
+        }
+
+        function triggerImageUpload() {
+            document.getElementById('tmpl-image-file').click();
+        }
+
+        async function uploadTemplateImage() {
+            const fileInput = document.getElementById('tmpl-image-file');
+            const file = fileInput.files[0];
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const resp = await fetch('/api/upload-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    const imgTag = `<img src="${data.url}" style="max-width:100%; height:auto; display:block; margin:10px 0;" alt="Image" />`;
+                    insertTextAtCursor('tmpl-body', imgTag);
+                } else {
+                    alert('Upload failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Connection error during upload: ' + err);
+            }
+            fileInput.value = ''; // Reset
+        }
+
+        // Campaign Scheduling Trigger Checkpoint Toggling
+        function toggleScheduleBlock() {
+            const chk = document.getElementById('chk-schedule');
+            const block = document.getElementById('schedule-block');
+            const dateInput = document.getElementById('sched-date');
+            const timeInput = document.getElementById('sched-time');
+            if (chk.checked) {
+                block.style.display = 'block';
+                dateInput.required = true;
+                timeInput.required = true;
+                
+                // Set default scheduled time to current time + 10 mins
+                const now = new Date();
+                now.setMinutes(now.getMinutes() + 10);
+                const localDate = now.toISOString().split('T')[0];
+                const localTime = now.toTimeString().substring(0, 5);
+                dateInput.value = localDate;
+                timeInput.value = localTime;
+            } else {
+                block.style.display = 'none';
+                dateInput.required = false;
+                timeInput.required = false;
+                dateInput.value = '';
+                timeInput.value = '';
+            }
+        }
+
+        // Scheduled Campaigns Listing & Cancelling
+        async function loadScheduledCampaigns() {
+            try {
+                const response = await fetch('/api/scheduled-campaigns');
+                const list = await response.json();
+                const container = document.getElementById('scheduled-triggers-list');
+                if (!container) return;
+                
+                if (!list || list.length === 0) {
+                    container.innerHTML = '<div style="color:var(--muted); font-size:13px; text-align:center; padding:12px;">No upcoming triggers.</div>';
+                    return;
+                }
+                
+                container.innerHTML = list.map(c => {
+                    const utcDate = new Date(c.scheduled_time + 'Z');
+                    const localStr = utcDate.toLocaleString(undefined, {
+                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                    });
+                    return `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+                        <div>
+                            <div style="font-weight:600; color:var(--text);">${c.category}</div>
+                            <div style="font-size:11px; color:var(--muted); line-height:1.4;">
+                                Sender: ${c.sender_email}<br>
+                                <span style="color:var(--accent); font-weight:600;">Trigger: ${localStr}</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary btn-sm" style="color:var(--danger); padding:2px 8px; font-size:11px;" onclick="cancelScheduledCampaign(${c.id})">Cancel</button>
+                    </div>`;
+                }).join('');
+            } catch (err) {
+                console.error("Error loading scheduled campaigns:", err);
+            }
+        }
+
+        async function cancelScheduledCampaign(id) {
+            if (!confirm("Are you sure you want to cancel this scheduled trigger?")) return;
+            try {
+                const response = await fetch('/api/scheduled-campaigns/cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id })
+                });
+                const res = await response.json();
+                if (res.ok) {
+                    loadScheduledCampaigns();
+                } else {
+                    alert('Error cancelling scheduled trigger.');
+                }
+            } catch (err) {
+                alert('Connection error: ' + err);
+            }
+        }
+
         // Initialize App on Window Load
         window.onload = function() {
             initData();
         };
     </script>
+
 </body>
 </html>

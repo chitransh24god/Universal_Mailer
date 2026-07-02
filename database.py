@@ -236,6 +236,20 @@ def init_db():
             value TEXT
         );
     """)
+
+    # 9. Scheduled Campaigns
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS scheduled_campaigns (
+            id SERIAL PRIMARY KEY,
+            sender_email TEXT NOT NULL,
+            category TEXT NOT NULL,
+            excel_filename TEXT NOT NULL,
+            scheduled_time TIMESTAMP NOT NULL,
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
     
     seed_defaults()
 
