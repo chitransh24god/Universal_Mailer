@@ -338,6 +338,10 @@ def make_html_body_tracked(plain_text, track_token, base_url=""):
     plain_text = plain_text.replace("src='/static/", f"src='{base_url}/static/")
     plain_text = plain_text.replace('src="static/', f'src="{base_url}/static/')
     plain_text = plain_text.replace("src='static/", f"src='{base_url}/static/")
+    plain_text = plain_text.replace('href="/static/', f'href="{base_url}/static/')
+    plain_text = plain_text.replace("href='/static/", f"href='{base_url}/static/")
+    plain_text = plain_text.replace('href="static/', f'href="{base_url}/static/')
+    plain_text = plain_text.replace("href='static/", f"href='{base_url}/static/")
     
     body = make_html_body(plain_text)
     pixel = (
@@ -1564,8 +1568,8 @@ async def send_emails(request: Request, sender_email: str = Form(...), category:
                         f'<body style="font-family:sans-serif;background:#f5f4f0;color:#4a6741;padding:40px;text-align:center;font-size:16px;">'
                         f'Campaign launched from <b>{sender_email}</b> — {count} emails!</body></html>')
 
-@app.post("/api/upload-image")
-async def upload_image(file: UploadFile = File(...)):
+@app.post("/api/upload-attachment")
+async def upload_attachment(file: UploadFile = File(...)):
     try:
         os.makedirs("static/uploads", exist_ok=True)
         filename = f"{int(time.time())}_{file.filename.replace(' ', '_')}"
@@ -1575,6 +1579,7 @@ async def upload_image(file: UploadFile = File(...)):
         return JSONResponse({"ok": True, "url": f"/static/uploads/{filename}"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @app.get("/api/scheduled-campaigns")
 async def get_scheduled_campaigns():

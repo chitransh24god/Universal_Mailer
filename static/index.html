@@ -837,14 +837,18 @@
         </div>
 
         <!-- Navigation Tabs -->
-        <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('launch', this)">Launch Campaign</button>
-            <button class="tab-btn" onclick="switchTab('templates', this)">Templates</button>
-            <button class="tab-btn" onclick="switchTab('draft', this)">Draft Preview</button>
-            <button class="tab-btn" onclick="switchTab('monitor', this)">Live Monitor</button>
-            <button class="tab-btn" onclick="switchTab('tracking', this)">Email Tracking</button>
-            <button class="tab-btn" onclick="switchTab('settings', this)">Settings Panel</button>
+        <div class="tabs" style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; gap:2px; flex-grow:1; flex-wrap:wrap;">
+                <button class="tab-btn active" onclick="switchTab('launch', this)">Launch Campaign</button>
+                <button class="tab-btn" onclick="switchTab('templates', this)">Templates</button>
+                <button class="tab-btn" onclick="switchTab('draft', this)">Draft Preview</button>
+                <button class="tab-btn" onclick="switchTab('monitor', this)">Live Monitor</button>
+                <button class="tab-btn" onclick="switchTab('tracking', this)">Email Tracking</button>
+                <button class="tab-btn" onclick="switchTab('settings', this)">Settings Panel</button>
+            </div>
+            <button class="btn btn-secondary btn-sm" style="color:var(--danger); border-color:var(--danger); font-size:12px; margin-left:12px; white-space:nowrap; padding:6px 12px; height:fit-content; background:transparent;" onclick="logout()">🚪 Logout</button>
         </div>
+
 
         <!-- ── TAB 1: LAUNCH CAMPAIGN ────────────────────────────────────────── -->
         <div class="tab-pane active" id="tab-launch">
@@ -935,8 +939,17 @@
                                 <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-style:italic; font-size:11px;" onclick="insertTextAtCursor('tmpl-body', '<i>', '</i>')">I</button>
                                 <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; text-decoration:underline; font-size:11px;" onclick="insertTextAtCursor('tmpl-body', '<u>', '</u>')">U</button>
                                 <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="insertTextAtCursor('tmpl-body', '<br>')">Line Break</button>
-                                <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="triggerImageUpload()">🖼️ Attach Image</button>
-                                <input type="file" id="tmpl-image-file" style="display:none;" accept="image/*" onchange="uploadTemplateImage()">
+                                <div style="position:relative; display:inline-block; z-index:90;">
+                                    <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="toggleAttachmentDropdown(event)">📎 Add Attachment ▾</button>
+                                    <div id="attachment-dropdown" style="display:none; position:absolute; left:0; top:24px; background:var(--card-bg, #ffffff); border:1px solid var(--border); border-radius:var(--r); box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:100; min-width:180px; padding:4px 0;">
+                                        <a href="#" style="display:block; padding:8px 12px; color:var(--text); text-decoration:none; font-size:12px; transition: background 0.2s;" onmouseover="this.style.background='var(--surface-lt)'" onmouseout="this.style.background='transparent'" onclick="triggerAttachmentUpload(event, 'image')">🖼️ Image (PNG, JPG, etc.)</a>
+                                        <a href="#" style="display:block; padding:8px 12px; color:var(--text); text-decoration:none; font-size:12px; transition: background 0.2s;" onmouseover="this.style.background='var(--surface-lt)'" onmouseout="this.style.background='transparent'" onclick="triggerAttachmentUpload(event, 'pdf')">📄 PDF Document</a>
+                                        <a href="#" style="display:block; padding:8px 12px; color:var(--text); text-decoration:none; font-size:12px; transition: background 0.2s;" onmouseover="this.style.background='var(--surface-lt)'" onmouseout="this.style.background='transparent'" onclick="triggerAttachmentUpload(event, 'excel')">📊 Spreadsheet (Excel/CSV)</a>
+                                        <a href="#" style="display:block; padding:8px 12px; color:var(--text); text-decoration:none; font-size:12px; transition: background 0.2s;" onmouseover="this.style.background='var(--surface-lt)'" onmouseout="this.style.background='transparent'" onclick="triggerAttachmentUpload(event, 'all')">📁 Any File format</a>
+                                    </div>
+                                </div>
+                                <input type="file" id="tmpl-attachment-file" style="display:none;" onchange="uploadTemplateAttachment()">
+
                             </div>
                             <textarea id="tmpl-body" placeholder="Dear {Owner Name}, from {Company Name}..." oninput="queueAnalysis()" style="border-radius:0 0 var(--r) var(--r);"></textarea>
                         </div>
@@ -2342,12 +2355,47 @@
             queueAnalysis();
         }
 
-        function triggerImageUpload() {
-            document.getElementById('tmpl-image-file').click();
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            const dropdown = document.getElementById('attachment-dropdown');
+            if (dropdown && dropdown.style.display === 'block') {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        function toggleAttachmentDropdown(event) {
+            if (event) event.stopPropagation();
+            const dropdown = document.getElementById('attachment-dropdown');
+            if (dropdown) {
+                dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+            }
         }
 
-        async function uploadTemplateImage() {
-            const fileInput = document.getElementById('tmpl-image-file');
+        function triggerAttachmentUpload(event, type) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            const dropdown = document.getElementById('attachment-dropdown');
+            if (dropdown) dropdown.style.display = 'none';
+            
+            const input = document.getElementById('tmpl-attachment-file');
+            if (!input) return;
+            
+            if (type === 'image') {
+                input.accept = 'image/*';
+            } else if (type === 'pdf') {
+                input.accept = '.pdf';
+            } else if (type === 'excel') {
+                input.accept = '.xlsx,.xls,.csv';
+            } else {
+                input.accept = '*/*';
+            }
+            input.click();
+        }
+
+        async function uploadTemplateAttachment() {
+            const fileInput = document.getElementById('tmpl-attachment-file');
             const file = fileInput.files[0];
             if (!file) return;
             
@@ -2355,14 +2403,22 @@
             formData.append('file', file);
             
             try {
-                const resp = await fetch('/api/upload-image', {
+                const resp = await fetch('/api/upload-attachment', {
                     method: 'POST',
                     body: formData
                 });
                 const data = await resp.json();
                 if (data.ok) {
-                    const imgTag = `<img src="${data.url}" style="max-width:100%; height:auto; display:block; margin:10px 0;" alt="Image" />`;
-                    insertTextAtCursor('tmpl-body', imgTag);
+                    const ext = file.name.split('.').pop().toLowerCase();
+                    const isImg = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(ext);
+                    
+                    let htmlTag = '';
+                    if (isImg) {
+                        htmlTag = `<img src="${data.url}" style="max-width:100%; height:auto; display:block; margin:10px 0;" alt="${file.name}" />`;
+                    } else {
+                        htmlTag = `<a href="${data.url}" target="_blank" style="color:var(--accent); font-weight:600; text-decoration:underline;">📄 Download ${file.name}</a>`;
+                    }
+                    insertTextAtCursor('tmpl-body', htmlTag);
                 } else {
                     alert('Upload failed: ' + (data.error || 'Unknown error'));
                 }
@@ -2371,6 +2427,14 @@
             }
             fileInput.value = ''; // Reset
         }
+
+        function logout() {
+            if (confirm("Are you sure you want to log out from the dashboard?")) {
+                localStorage.removeItem("mailer_password");
+                window.location.href = '/';
+            }
+        }
+
 
         // Campaign Scheduling Trigger Checkpoint Toggling
         function toggleScheduleBlock() {
