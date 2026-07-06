@@ -1534,6 +1534,33 @@ async def tracking_summary():
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+@app.get("/api/activity-chart")
+async def activity_chart():
+    """Return last 7 days of email activity for the Dashboard chart."""
+    try:
+        from datetime import date, timedelta
+        cutoff_date = (date.today() - timedelta(days=6)).strftime("%Y-%m-%d")
+        rows = execute_query("""
+            SELECT DATE(sent_at) as dt, 
+                   COUNT(*) as sent, 
+                   SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) as opened
+            FROM sent_emails
+            WHERE DATE(sent_at) >= %s
+            GROUP BY DATE(sent_at)
+            ORDER BY DATE(sent_at) ASC;
+        """, [cutoff_date], fetch="all")
+        
+        # Fill in missing days
+        data = { (date.today() - timedelta(days=i)).strftime("%Y-%m-%d"): {"sent": 0, "opened": 0} for i in range(6, -1, -1) }
+        if rows:
+            for r in rows:
+                if r["dt"] in data:
+                    data[r["dt"]] = {"sent": r["sent"] or 0, "opened": r["opened"] or 0}
+                    
+        return JSONResponse(data)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @app.get("/api/campaign-history")
 async def campaign_history():

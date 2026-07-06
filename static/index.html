@@ -1741,7 +1741,11 @@ select.form-control {
 
         // ── DASHBOARD KPIs ────────────────────────────────
         async function loadDashboardData() {
-            renderActivityChart();
+            try {
+                const actResp = await fetch('/api/activity-chart');
+                const actData = await actResp.json();
+                renderActivityChart(actData);
+            } catch(e) { console.log('Activity chart:', e); }
             try {
                 const r = await fetch('/api/tracking-summary');
                 const data = await r.json();
@@ -1767,7 +1771,8 @@ select.form-control {
                 const senders = await sr.json();
                 const qList = document.getElementById('sender-quota-list');
                 if (qList && senders.length) {
-                    qList.innerHTML = senders.slice(0,5).map(s => {
+                    senders.sort((a,b) => (b.sent_today||0) - (a.sent_today||0));
+                    qList.innerHTML = senders.map(s => {
                         const sent = s.sent_today || 0;
                         const limit = 300;
                         const pct = Math.min(100, Math.round((sent / limit) * 100));
@@ -2967,18 +2972,24 @@ select.form-control {
         }
 
         // ── ACTIVITY CHART ────────────────────────────────
-        function renderActivityChart() {
+        function renderActivityChart(data) {
             const chart = document.getElementById('activity-chart');
-            if (!chart) return;
-            const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-            const sends = [120,95,180,210,145,88,170];
-            const opens = [54,38,82,95,61,34,74];
-            const maxVal = Math.max(...sends);
+            if (!chart || !data) return;
+            
+            const dates = Object.keys(data).sort();
+            const days = dates.map(d => {
+                const dt = new Date(d);
+                return dt.toLocaleDateString('en-US', {weekday: 'short'});
+            });
+            const sends = dates.map(d => data[d].sent);
+            const opens = dates.map(d => data[d].opened);
+            
+            const maxVal = Math.max(...sends, 10); // Minimum scale of 10
             chart.innerHTML = days.map((d,i) => `
                 <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
                     <div style="width:100%;display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;justify-content:flex-end;">
-                        <div style="width:60%;height:${maxVal>0 ? Math.round((opens[i]/maxVal)*85) : 0}%;background:#10b981;border-radius:3px 3px 0 0;opacity:0.75;transition:height 0.5s;" title="Opens: ${opens[i]}"></div>
-                        <div style="width:90%;height:${maxVal>0 ? Math.round((sends[i]/maxVal)*85) : 0}%;background:linear-gradient(to top, var(--brand), var(--brand-mid));border-radius:3px 3px 0 0;transition:height 0.5s;" title="Sent: ${sends[i]}"></div>
+                        <div style="width:60%;height:${Math.round((opens[i]/maxVal)*85)}%;background:#10b981;border-radius:3px 3px 0 0;opacity:0.75;transition:height 0.5s;" title="Opens: ${opens[i]}"></div>
+                        <div style="width:90%;height:${Math.round((sends[i]/maxVal)*85)}%;background:linear-gradient(to top, var(--brand), var(--brand-mid));border-radius:3px 3px 0 0;transition:height 0.5s;" title="Sent: ${sends[i]}"></div>
                     </div>
                     <div style="font-size:10px;color:#94a3b8;margin-top:4px;font-weight:500;">${d}</div>
                 </div>`).join('');
