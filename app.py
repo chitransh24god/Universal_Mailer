@@ -180,6 +180,15 @@ def get_today_sent():
         print(f"Error reading daily count: {e}")
         return 0
 
+def get_sender_today_sent(sender_email):
+    try:
+        row = execute_query("SELECT COUNT(*) as cnt FROM sent_emails WHERE sender_email = %s AND sent_at >= CURRENT_DATE;", [sender_email], fetch="one")
+        return row["cnt"] if row else 0
+    except Exception as e:
+        print(f"Error reading sender daily count: {e}")
+        return 0
+
+
 def increment_counter():
     try:
         # Check if date exists
@@ -433,7 +442,7 @@ def make_campaign_state(sender_email="", category=""):
         "started_at": datetime.now(IST).strftime("%H:%M:%S")
     }
 
-def run_campaign(df_dict, email_subject, template_text, email_col, sender_email, sender_name, campaign_id, category, base_url=""):
+def run_campaign(df_dict, email_subject, template_text, email_col, sender_email, sender_name, campaign_id, category, base_url="", custom_campaign_name=""):
     import secrets
     df = pd.DataFrame(df_dict)
     if 'Email' in df.columns:
@@ -444,6 +453,8 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
         campaigns[campaign_id] = make_campaign_state(sender_email=sender_email, category=category)
         campaigns[campaign_id]["running"] = True
         campaigns[campaign_id]["total_rows"] = total
+        
+    campaign_name = custom_campaign_name if custom_campaign_name else f"{sender_email} - {datetime.now(IST).strftime('%d %b %Y, %I:%M %p')}"
         
     add_log(f"Campaign started | Sender: {sender_email} | Category: {category} | Rows: {total}", campaign_id)
     
@@ -468,13 +479,21 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
     daily_limit = sender_config.get("daily_limit") or DAILY_LIMIT
     delay_min = sender_config.get("delay_min") if sender_config.get("delay_min") is not None else DELAY_MIN_SECS
     delay_max = sender_config.get("delay_max") if sender_config.get("delay_max") is not None else DELAY_MAX_SECS
-    
     for index, row in df.iterrows():
         # Check if campaign was cancelled
         with campaigns_lock:
             if campaign_id in campaigns and campaigns[campaign_id].get("cancelled"):
                 add_log(f"Campaign cancelled/stopped by user.", campaign_id)
                 break
+
+        # Check per-sender daily limit of 300
+        sender_sent_today = get_sender_today_sent(sender_email)
+        if sender_sent_today >= 300:
+            add_log(f"⚠️ [Limit Reached] {sender_email} has reached the daily limit of 300 emails today. Campaign stopped. Please use another ID or wait for next day.", campaign_id)
+            with campaigns_lock:
+                campaigns[campaign_id]["running"] = False
+                campaigns[campaign_id]["paused"] = False
+            break
 
         # Check global/daily limit
         if get_today_sent() >= daily_limit:
@@ -522,8 +541,12 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
             else:
                 add_log(f"[{index+1}/{total}] FAIL SMTP {customer_email} ({category}): {result}", campaign_id)
         else:
-            # Centralize replies only for mybankloan.ai domains. For others, keep sender's own email to avoid DMARC mismatch.
-            reply_email = "admin@mybankloan.ai" if "mybankloan.ai" in sender_email.lower() else sender_email
+            # Check global settings for custom reply receiver ID
+            admin_receiver = execute_query("SELECT value FROM global_settings WHERE key='reply_receiver_id';", fetch="one")
+            admin_receiver = admin_receiver["value"] if admin_receiver and admin_receiver["value"] else "admin@mybankloan.ai"
+            
+            # Centralize replies.
+            reply_email = admin_receiver if "mybankloan.ai" in sender_email.lower() else sender_email
             payload = {
                 "sender": {"name": sender_name, "email": sender_email},
                 "to": [{"email": customer_email}],
@@ -560,10 +583,10 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
             try:
                 execute_query(
                     """INSERT INTO sent_emails
-                       (track_token, sender_email, to_email, company_name, owner_name, subject, message_id)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING;""",
+                       (track_token, sender_email, to_email, company_name, owner_name, subject, message_id, campaign_name)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING;""",
                     [track_token, sender_email, customer_email,
-                     row_dict.get('Company Name', ''), row_dict.get('Owner Name', ''), subject, msg_id]
+                     row_dict.get('Company Name', ''), row_dict.get('Owner Name', ''), subject, msg_id, campaign_name]
                 )
             except Exception as te:
                 print(f"Track save error: {te}")
@@ -773,7 +796,7 @@ def run_scheduled_campaign_thread(sc_id, sender_email, category, filepath):
         sender_name = sender_details["display_name"] if sender_details else "VSD Finserv"
         
         # Run campaign in background
-        run_campaign(df.to_dict(orient="list"), email_subject, template_text, "Email", sender_email, sender_name, campaign_id, category, base_url)
+        run_campaign(df.to_dict(orient="list"), email_subject, template_text, "Email", sender_email, sender_name, campaign_id, category, base_url, sc.get("campaign_name", ""))
         
         execute_query("UPDATE scheduled_campaigns SET status = 'completed' WHERE id = %s;", [sc_id])
     except Exception as e:
@@ -879,10 +902,16 @@ async def get_status():
         senders_status = {}
         for cid, st in campaigns.items():
             s = st["sender_email"]
+            total_rows = st["total_rows"]
+            current_row = st["current_row"]
+            remaining = max(0, total_rows - current_row)
+            
             entry = {
                 "campaign_id": cid, "category": st["category"],
                 "running": st["running"], "paused": st["paused"],
-                "current_row": st["current_row"], "total_rows": st["total_rows"],
+                "current_row": current_row, "total_rows": total_rows,
+                "remaining_emails": remaining,
+                "estimated_time_mins": round(remaining * (st.get("delay_avg", 90) / 60)),
                 "started_at": st.get("started_at", ""), "log": list(st["log"]),
             }
             senders_status.setdefault(s, []).append(entry)
@@ -894,9 +923,15 @@ async def get_status():
 @app.get("/api/settings")
 async def get_settings():
     try:
-        rows = execute_query("SELECT key, value FROM global_settings;", fetch="all")
-        settings_d = {r["key"]: r["value"] for r in rows} if rows else {}
-        return JSONResponse(settings_d)
+        url_row = execute_query("SELECT value FROM global_settings WHERE key='tracking_base_url';", fetch="one")
+        pwd_row = execute_query("SELECT value FROM global_settings WHERE key='dashboard_password';", fetch="one")
+        recv_row = execute_query("SELECT value FROM global_settings WHERE key='reply_receiver_id';", fetch="one")
+        
+        return JSONResponse({
+            "tracking_base_url": url_row["value"] if url_row else "",
+            "dashboard_password": pwd_row["value"] if pwd_row else "",
+            "reply_receiver_id": recv_row["value"] if recv_row else ""
+        })
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
@@ -904,15 +939,12 @@ async def get_settings():
 async def save_settings(request: Request):
     try:
         body = await request.json()
-        for k, v in body.items():
-            val = str(v).strip()
-            # Sanitize tracking URL: strip query parameters and trailing slashes
-            if k == "tracking_base_url" and "?" in val:
-                val = val.split("?")[0].rstrip("/")
-            execute_query("""
-                INSERT INTO global_settings (key, value) VALUES (%s, %s)
-                ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value;
-            """, [k, val])
+        if "tracking_base_url" in body:
+            execute_query("INSERT INTO global_settings (key, value) VALUES ('tracking_base_url', %s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value;", [body["tracking_base_url"]])
+        if "dashboard_password" in body:
+            execute_query("INSERT INTO global_settings (key, value) VALUES ('dashboard_password', %s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value;", [body["dashboard_password"]])
+        if "reply_receiver_id" in body:
+            execute_query("INSERT INTO global_settings (key, value) VALUES ('reply_receiver_id', %s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value;", [body["reply_receiver_id"]])
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -922,9 +954,15 @@ async def save_settings(request: Request):
 async def get_senders():
     try:
         rows = execute_query("SELECT email, display_name, provider_type, api_key, smtp_host, smtp_port, smtp_username, imap_host, imap_port, daily_limit, delay_min, delay_max, active FROM sender_accounts ORDER BY email;", fetch="all")
-        return JSONResponse(rows)
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["sent_today"] = get_sender_today_sent(d["email"])
+            result.append(d)
+        return JSONResponse(result)
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @app.post("/api/senders")
 async def save_sender(request: Request):
@@ -1197,13 +1235,16 @@ async def api_analyze_template(request: Request):
 # Tracking & Logs Stats API
 @app.get("/tracking-stats")
 async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200,
-                         date_from: str = "", date_to: str = ""):
+                         date_from: str = "", date_to: str = "", campaign_name: str = ""):
     try:
         where = []
         params = []
         if sender:
             where.append("se.sender_email=%s")
             params.append(sender)
+        if campaign_name:
+            where.append("se.campaign_name=%s")
+            params.append(campaign_name)
         if filter == "opened":
             where.append("se.opened=TRUE AND se.replied=FALSE")
         elif filter == "replied":
@@ -1237,6 +1278,9 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200
         if sender:
             sum_where.append("sender_email=%s")
             sum_params.append(sender)
+        if campaign_name:
+            sum_where.append("campaign_name=%s")
+            sum_params.append(campaign_name)
         if date_from:
             sum_where.append("DATE(sent_at) >= %s")
             sum_params.append(date_from)
@@ -1279,8 +1323,37 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/tracking-per-sender")
-async def tracking_per_sender(date_from: str = "", date_to: str = ""):
+async def tracking_per_sender(date_from: str = "", date_to: str = "", campaign_name: str = ""):
     """Returns per-sender breakdown of sent/opened/replied counts."""
+    try:
+        where = []
+        params = []
+        if date_from:
+            where.append("DATE(sent_at) >= %s")
+            params.append(date_from)
+        if date_to:
+            where.append("DATE(sent_at) <= %s")
+            params.append(date_to)
+        if campaign_name:
+            where.append("campaign_name=%s")
+            params.append(campaign_name)
+        where_clause = ("WHERE " + " AND ".join(where)) if where else ""
+        rows = execute_query(f"""
+            SELECT sender_email,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) AS opened,
+                   SUM(CASE WHEN replied=TRUE THEN 1 ELSE 0 END) AS replied,
+                   SUM(CASE WHEN opened=FALSE AND alerted_48h=TRUE THEN 1 ELSE 0 END) AS not_opened_48h
+            FROM sent_emails {where_clause}
+            GROUP BY sender_email ORDER BY total DESC;
+        """, params, fetch="all")
+        return JSONResponse(rows or [])
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/tracking-per-campaign")
+async def tracking_per_campaign(date_from: str = "", date_to: str = ""):
+    """Returns per-campaign breakdown (grouped by subject) of sent/opened/replied counts."""
     try:
         where = []
         params = []
@@ -1292,13 +1365,13 @@ async def tracking_per_sender(date_from: str = "", date_to: str = ""):
             params.append(date_to)
         where_clause = ("WHERE " + " AND ".join(where)) if where else ""
         rows = execute_query(f"""
-            SELECT sender_email,
+            SELECT campaign_name, subject,
                    COUNT(*) AS total,
                    SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) AS opened,
                    SUM(CASE WHEN replied=TRUE THEN 1 ELSE 0 END) AS replied,
                    SUM(CASE WHEN opened=FALSE AND alerted_48h=TRUE THEN 1 ELSE 0 END) AS not_opened_48h
             FROM sent_emails {where_clause}
-            GROUP BY sender_email ORDER BY total DESC;
+            GROUP BY campaign_name, subject ORDER BY total DESC;
         """, params, fetch="all")
         return JSONResponse(rows or [])
     except Exception as e:
@@ -1437,6 +1510,55 @@ async def get_history():
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+
+@app.get("/api/tracking-summary")
+async def tracking_summary():
+    """Return all-time KPI totals for the Dashboard panel."""
+    try:
+        row = execute_query("""
+            SELECT
+                COUNT(*) AS total_sent,
+                SUM(CASE WHEN opened = TRUE THEN 1 ELSE 0 END) AS total_opened,
+                SUM(CASE WHEN replied = TRUE THEN 1 ELSE 0 END) AS total_replied,
+                SUM(CASE WHEN alerted_48h = TRUE AND opened = FALSE THEN 1 ELSE 0 END) AS total_bounced
+            FROM sent_emails;
+        """, fetch="one")
+        if row:
+            return JSONResponse({
+                "total_sent":    int(row.get("total_sent") or 0),
+                "total_opened":  int(row.get("total_opened") or 0),
+                "total_replied": int(row.get("total_replied") or 0),
+                "total_bounced": int(row.get("total_bounced") or 0),
+            })
+        return JSONResponse({"total_sent": 0, "total_opened": 0, "total_replied": 0, "total_bounced": 0})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/campaign-history")
+async def campaign_history():
+    """Return recent campaign groups (template + date + count) for Dashboard."""
+    try:
+        rows = execute_query("""
+            SELECT
+                DATE(sent_at) AS counter_date,
+                sender_email,
+                COUNT(*) AS total_rows
+            FROM sent_emails
+            GROUP BY DATE(sent_at), sender_email
+            ORDER BY DATE(sent_at) DESC
+            LIMIT 20;
+        """, fetch="all")
+        result = []
+        for r in (rows or []):
+            d = dict(r)
+            d["counter_date"] = str(d.get("counter_date", ""))
+            d["template"] = d.get("sender_email", "").split("@")[0]
+            result.append(d)
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 @app.get("/diagnose-gmail")
 async def diagnose_gmail():
     results = {}
@@ -1453,7 +1575,7 @@ async def diagnose_gmail():
             results[f"{host}:{port} ({label})"] = f"BLOCKED — {e}"
     return JSONResponse(results)
 
-async def _launch_campaign(sender_email, category, file, base_url=""):
+async def _launch_campaign(sender_email, category, file, base_url="", custom_campaign_name=""):
     try:
         row = execute_query("SELECT value FROM global_settings WHERE key='tracking_base_url';", fetch="one")
         if row and row["value"]:
@@ -1496,7 +1618,7 @@ async def _launch_campaign(sender_email, category, file, base_url=""):
         
         t = threading.Thread(
             target=run_campaign,
-            args=(df.to_dict(orient="list"), email_subject, template_text, "Email", sender_email, sender_name, campaign_id, category, base_url),
+            args=(df.to_dict(orient="list"), email_subject, template_text, "Email", sender_email, sender_name, campaign_id, category, base_url, custom_campaign_name),
             daemon=True
         )
         t.start()
@@ -1506,11 +1628,11 @@ async def _launch_campaign(sender_email, category, file, base_url=""):
 
 @app.post("/send-emails-public/")
 async def send_emails_public(request: Request, pwd: str = Form(...), sender_email: str = Form(...),
-                             category: str = Form(...), file: UploadFile = File(...)):
+                             category: str = Form(...), file: UploadFile = File(...), campaign_name: str = Form(None)):
     if pwd != get_dashboard_password():
         return JSONResponse(status_code=403, content={"error": "Unauthorized"})
     base_url = str(request.base_url).rstrip('/')
-    count, err = await _launch_campaign(sender_email, category, file, base_url)
+    count, err = await _launch_campaign(sender_email, category, file, base_url, campaign_name or "")
     if err:
         return HTMLResponse(f'<html><head><meta http-equiv="refresh" content="3;url=/?pwd={pwd}"></head>'
                             f'<body style="font-family:sans-serif;background:#f8f9fb;color:#b42318;padding:48px;text-align:center;font-size:15px;">'
@@ -1522,7 +1644,8 @@ async def send_emails_public(request: Request, pwd: str = Form(...), sender_emai
 @app.post("/send-emails/")
 async def send_emails(request: Request, sender_email: str = Form(...), category: str = Form(...),
                        file: UploadFile = File(...), is_scheduled: str = Form(None),
-                       scheduled_date: str = Form(None), scheduled_time: str = Form(None)):
+                       scheduled_date: str = Form(None), scheduled_time: str = Form(None),
+                       campaign_name: str = Form(None)):
     base_url = str(request.base_url).rstrip('/')
     
     if is_scheduled == "true" or is_scheduled is True or is_scheduled == "on":
@@ -1546,10 +1669,10 @@ async def send_emails(request: Request, sender_email: str = Form(...), category:
                 f.write(file_content)
                 
             # Insert into database
-            execute_query("""
-                INSERT INTO scheduled_campaigns (sender_email, category, excel_filename, scheduled_time, status)
-                VALUES (%s, %s, %s, %s, 'pending');
-            """, [sender_email, category, filename, utc_dt])
+            execute_query(
+                "INSERT INTO scheduled_campaigns (sender_email, category, excel_filename, scheduled_time, campaign_name) VALUES (%s,%s,%s,%s,%s);",
+                [sender_email, category, filename, utc_dt, campaign_name or ""]
+            )
             
             return HTMLResponse(f'<html><head><meta http-equiv="refresh" content="4;url=/"></head>'
                                 f'<body style="font-family:sans-serif;background:#f5f4f0;color:#1e3a8a;padding:40px;text-align:center;font-size:16px;">'
@@ -1561,7 +1684,7 @@ async def send_emails(request: Request, sender_email: str = Form(...), category:
             return JSONResponse(status_code=500, content={"status": "error", "message": f"Scheduling failed: {e}"})
             
     # Launch campaign immediately
-    count, err = await _launch_campaign(sender_email, category, file, base_url)
+    count, err = await _launch_campaign(sender_email, category, file, base_url, campaign_name or "")
     if err:
         return JSONResponse(status_code=400, content={"status": "error", "message": err})
     return HTMLResponse(f'<html><head><meta http-equiv="refresh" content="3;url=/"></head>'

@@ -1,1351 +1,1679 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal Bulk Mailer & Optimizer</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg: #f8fafc;
-            --surface: #ffffff;
-            --surface-lt: #f1f5f9;
-            --border: #e2e8f0;
-            --border-glow: rgba(16, 185, 129, 0.25);
-            --text: #0f172a;
-            --muted: #475569;
-            --hint: #64748b;
-            --accent: #059669;
-            --accent-glow: rgba(5, 150, 105, 0.08);
-            --success: #059669;
-            --success-bg: rgba(5, 150, 105, 0.06);
-            --warn: #d97706;
-            --warn-bg: rgba(217, 119, 6, 0.06);
-            --danger: #dc2626;
-            --danger-bg: rgba(220, 38, 38, 0.06);
-            --r: 10px;
-            --rl: 16px;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Outfit', sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            font-size: 14px;
-            line-height: 1.5;
-            position: relative;
-        }
-
-        /* Subtle glowing background orbs */
-        body::before {
-            content: '';
-            position: absolute;
-            width: 400px;
-            height: 400px;
-            background: radial-gradient(circle, rgba(5, 150, 105, 0.04) 0%, transparent 70%);
-            top: -100px;
-            right: 0;
-            z-index: -1;
-            pointer-events: none;
-        }
-
-        body::after {
-            content: '';
-            position: absolute;
-            width: 400px;
-            height: 400px;
-            background: radial-gradient(circle, rgba(99, 102, 241, 0.02) 0%, transparent 70%);
-            bottom: 0;
-            left: 0;
-            z-index: -1;
-            pointer-events: none;
-        }
-
-        .shell {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 24px 20px 60px;
-        }
-
-        /* Header bar */
-        .topbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 28px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .brand-icon {
-            width: 38px;
-            height: 38px;
-            background: var(--accent-glow);
-            border-radius: var(--r);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid rgba(5, 150, 105, 0.2);
-            box-shadow: 0 4px 10px rgba(5, 150, 105, 0.05);
-        }
-
-        .brand-icon svg {
-            fill: var(--accent);
-            width: 20px;
-            height: 20px;
-        }
-
-        .brand-name {
-            font-size: 18px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-        }
-
-        .brand-name span {
-            color: var(--accent);
-        }
-
-        .clock-badge {
-            font-size: 12px;
-            color: var(--muted);
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 99px;
-            padding: 6px 16px;
-            font-weight: 500;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
-        }
-
-        /* Stats Grid */
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
-            margin-bottom: 28px;
-        }
-
-        .stat {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--rl);
-            padding: 20px;
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
-            transition: border-color 0.3s ease;
-        }
-
-        .stat:hover {
-            border-color: rgba(0, 0, 0, 0.12);
-        }
-
-        .stat-label {
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--hint);
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            margin-bottom: 8px;
-        }
-
-        .stat-value {
-            font-size: 32px;
-            font-weight: 700;
-            line-height: 1.1;
-            margin-bottom: 6px;
-        }
-
-        .stat-value.accent {
-            color: var(--accent);
-        }
-
-        .stat-value.warn {
-            color: var(--warn);
-        }
-
-        .stat-sub {
-            font-size: 12px;
-            color: var(--hint);
-        }
-
-        .prog-track {
-            height: 4px;
-            background: var(--surface-lt);
-            border-radius: 99px;
-            margin-top: 12px;
-            overflow: hidden;
-        }
-
-        .prog-fill {
-            height: 100%;
-            background: var(--accent);
-            border-radius: 99px;
-            width: 0%;
-            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        /* Navigation Tabs */
-        .tabs {
-            display: flex;
-            gap: 6px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--rl);
-            padding: 6px;
-            margin-bottom: 24px;
-            overflow-x: auto;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
-        }
-
-        .tab-btn {
-            padding: 9px 20px;
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--muted);
-            background: transparent;
-            border: none;
-            border-radius: var(--r);
-            cursor: pointer;
-            white-space: nowrap;
-            font-family: 'Outfit', sans-serif;
-            transition: all 0.2s ease;
-        }
-
-        .tab-btn:hover {
-            color: var(--text);
-            background: rgba(0, 0, 0, 0.02);
-        }
-
-        .tab-btn.active {
-            color: #ffffff;
-            background: var(--accent);
-            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
-        }
-
-        /* Layout & Panes */
-        .tab-pane {
-            display: none;
-            animation: fadeIn 0.3s ease;
-        }
-
-        .tab-pane.active {
-            display: block;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(6px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--rl);
-            padding: 24px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
-            margin-bottom: 20px;
-        }
-
-        .card-title {
-            font-size: 14px;
-            font-weight: 700;
-            margin-bottom: 20px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid var(--border);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--accent);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .grid2 {
-            display: grid;
-            grid-template-columns: 1.2fr 0.8fr;
-            gap: 20px;
-        }
-
-        .grid2-equal {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        /* Forms Elements */
-        .field {
-            margin-bottom: 16px;
-        }
-
-        .field label {
-            display: block;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--muted);
-            margin-bottom: 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        select, input[type=text], input[type=password], input[type=number], input[type=file], textarea {
-            width: 100%;
-            padding: 11px 14px;
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-            border-radius: var(--r);
-            color: var(--text);
-            font-family: 'Outfit', sans-serif;
-            font-size: 14px;
-            outline: none;
-            transition: all 0.2s ease;
-        }
-
-        select:focus, input:focus, textarea:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-glow);
-            background: #ffffff;
-        }
-
-        textarea {
-            height: 120px;
-            resize: vertical;
-        }
-
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 11px 20px;
-            border: none;
-            border-radius: var(--r);
-            font-family: 'Outfit', sans-serif;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            gap: 8px;
-        }
-
-        .btn-primary {
-            background: var(--accent);
-            color: #ffffff;
-            box-shadow: 0 4px 15px rgba(5, 150, 105, 0.2);
-            width: 100%;
-        }
-
-        .btn-primary:hover {
-            background: #047857;
-            transform: translateY(-1px);
-        }
-
-        .btn-secondary {
-            background: #ffffff;
-            color: var(--text);
-            border: 1px solid #cbd5e1;
-        }
-
-        .btn-secondary:hover {
-            background: #f8fafc;
-            border-color: #94a3b8;
-        }
-
-        .btn-danger {
-            background: var(--danger);
-            color: white;
-            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
-        }
-
-        .btn-danger:hover {
-            background: #b91c1c;
-        }
-
-        .btn-sm {
-            padding: 6px 12px;
-            font-size: 12px;
-            border-radius: 6px;
-        }
-
-        /* Badges */
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 12px;
-            border-radius: 99px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-
-        .badge::before {
-            content: '';
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-
-        .badge-running {
-            background: var(--accent-glow);
-            color: var(--accent);
-            border: 1px solid rgba(5, 150, 105, 0.15);
-        }
-        .badge-running::before { background: var(--accent); }
-
-        .badge-idle {
-            background: #f1f5f9;
-            color: var(--muted);
-            border: 1px solid var(--border);
-        }
-        .badge-idle::before { background: var(--hint); }
-
-        .badge-paused {
-            background: var(--warn-bg);
-            color: var(--warn);
-            border: 1px solid rgba(217, 119, 6, 0.15);
-        }
-        .badge-paused::before { background: var(--warn); }
-
-        .badge-done {
-            background: rgba(99, 102, 241, 0.08);
-            color: #4f46e5;
-            border: 1px solid rgba(99, 102, 241, 0.15);
-        }
-        .badge-done::before { background: #6366f1; }
-
-        /* Rules Table */
-        .rules-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .rules-table tr {
-            border-bottom: 1px solid var(--border);
-        }
-
-        .rules-table tr:last-child {
-            border-bottom: none;
-        }
-
-        .rules-table td {
-            padding: 12px 0;
-        }
-
-        .rules-table td:first-child {
-            color: var(--muted);
-            font-weight: 500;
-        }
-
-        .rules-table td:last-child {
-            text-align: right;
-            font-weight: 600;
-        }
-
-        /* Log Box (Clean slate-light console in light theme) */
-        .log-box {
-            background: #f8fafc;
-            border: 1px solid #cbd5e1;
-            border-radius: var(--r);
-            padding: 14px 18px;
-            height: 300px;
-            overflow-y: auto;
-            font-family: Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-            font-size: 12px;
-            line-height: 1.8;
-            color: #334155;
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
-        }
-
-        .log-ok { color: #047857; font-weight: 600; }
-        .log-err { color: #b91c1c; font-weight: 600; }
-        .log-warn { color: #b45309; font-weight: 600; }
-
-        /* Senders list in monitor */
-        .monitor-senders-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            max-height: 320px;
-            overflow-y: auto;
-            padding-right: 4px;
-        }
-
-        .monitor-sender-card {
-            background: #f8fafc;
-            border: 1px solid var(--border);
-            border-radius: var(--r);
-            padding: 14px 16px;
-        }
-
-        .monitor-sender-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 10px;
-        }
-
-        .monitor-sender-title {
-            font-weight: 600;
-            font-size: 13px;
-        }
-
-        .monitor-sender-meta {
-            font-size: 11px;
-            color: var(--muted);
-            margin-top: 6px;
-        }
-
-        /* Deliverability Optimization Section */
-        .opt-score-container {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            background: #f8fafc;
-            border: 1px solid var(--border);
-            border-radius: var(--r);
-            padding: 16px 20px;
-            margin-bottom: 20px;
-        }
-
-        .opt-score-radial {
-            position: relative;
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            background: conic-gradient(var(--accent) 0deg, var(--surface-lt) 0deg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .opt-score-radial::after {
-            content: '';
-            position: absolute;
-            width: 66px;
-            height: 66px;
-            border-radius: 50%;
-            background: var(--surface);
-        }
-
-        .opt-score-val {
-            position: relative;
-            z-index: 2;
-            font-size: 24px;
-            font-weight: 700;
-        }
-
-        .opt-classification {
-            flex-grow: 1;
-        }
-
-        .opt-classification-title {
-            font-size: 12px;
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .opt-classification-value {
-            font-size: 20px;
-            font-weight: 700;
-            margin-top: 2px;
-        }
-
-        .opt-classification-value.primary { color: var(--accent); }
-        .opt-classification-value.promotions { color: var(--warn); }
-        .opt-classification-value.spam { color: var(--danger); }
-
-        .opt-suggestions-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            max-height: 400px;
-            overflow-y: auto;
-            padding-right: 4px;
-        }
-
-        .opt-suggestion-card {
-            border-radius: var(--r);
-            padding: 12px 14px;
-            border: 1px solid transparent;
-            font-size: 13px;
-        }
-
-        .opt-suggestion-card.warning {
-            background: #fef2f2;
-            border-color: #fee2e2;
-            color: #991b1b;
-        }
-
-        .opt-suggestion-card.suggestion {
-            background: #fffbeb;
-            border-color: #fef3c7;
-            color: #92400e;
-        }
-
-        .opt-suggestion-card.info {
-            background: #eff6ff;
-            border-color: #dbeafe;
-            color: #1e40af;
-        }
-
-        .opt-suggestion-msg {
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-
-        .opt-suggestion-rec {
-            font-size: 12px;
-            color: #475569;
-        }
-
-        /* Settings Grid Layout */
-        .settings-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        .sender-item-card {
-            background: #f8fafc;
-            border: 1px solid var(--border);
-            border-radius: var(--r);
-            padding: 16px;
-            margin-bottom: 12px;
-            position: relative;
-            transition: border-color 0.2s ease;
-        }
-
-        .sender-item-card:hover {
-            border-color: #94a3b8;
-        }
-
-        .sender-item-title {
-            font-weight: 600;
-            font-size: 15px;
-            margin-bottom: 4px;
-        }
-
-        .sender-item-subtitle {
-            font-size: 12px;
-            color: var(--muted);
-        }
-
-        .sender-item-meta {
-            display: flex;
-            gap: 12px;
-            margin-top: 12px;
-            font-size: 11px;
-            color: var(--hint);
-        }
-
-        .sender-item-actions {
-            position: absolute;
-            top: 16px;
-            right: 16px;
-            display: flex;
-            gap: 6px;
-        }
-
-        /* Mapping Checklist Grid */
-        .mapping-checklist {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 10px;
-            max-height: 250px;
-            overflow-y: auto;
-            border: 1px solid var(--border);
-            border-radius: var(--r);
-            padding: 12px;
-            background: #f8fafc;
-        }
-
-        .mapping-checkbox-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background 0.2s ease;
-        }
-
-        .mapping-checkbox-item:hover {
-            background: #f1f5f9;
-        }
-
-        .mapping-checkbox-item input {
-            cursor: pointer;
-            accent-color: var(--accent);
-            width: 16px;
-            height: 16px;
-        }
-
-        /* Tables */
-        table.track-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-
-        table.track-table th {
-            text-align: left;
-            padding: 10px;
-            color: var(--muted);
-            border-bottom: 2px solid var(--border);
-            font-weight: 600;
-        }
-
-        table.track-table td {
-            padding: 12px 10px;
-            border-bottom: 1px solid var(--border);
-            color: var(--text);
-        }
-
-        table.track-table tr:hover td {
-            background: #f8fafc;
-        }
-
-        .reply-preview-row td {
-            padding-top: 0px !important;
-            padding-bottom: 12px !important;
-        }
-
-        .reply-preview-container {
-            background: #f0fdf4;
-            border: 1px solid #bbf7d0;
-            border-radius: 8px;
-            padding: 10px 14px;
-            margin-left: 10px;
-            color: #166534;
-            font-size: 12px;
-        }
-
-        .step-badge {
-            display: inline-block;
-            background: var(--accent-glow);
-            color: var(--accent);
-            border: 1px solid rgba(5, 150, 105, 0.15);
-            border-radius: 50%;
-            width: 22px;
-            height: 22px;
-            text-align: center;
-            line-height: 20px;
-            font-size: 11px;
-            font-weight: 700;
-            margin-right: 8px;
-        }
-
-        .info-box {
-            background: rgba(5, 150, 105, 0.05);
-            border: 1px solid rgba(5, 150, 105, 0.15);
-            border-radius: var(--r);
-            padding: 12px 16px;
-            font-size: 12px;
-            color: #065f46;
-            margin-bottom: 16px;
-        }
-
-        .gmail-note {
-            background: #fef2f2;
-            border: 1px solid #fecaca;
-            border-radius: var(--r);
-            padding: 12px 16px;
-            font-size: 12px;
-            color: #991b1b;
-            margin-bottom: 16px;
-            display: none;
-        }
-
-        /* Custom Scrollbars */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #f1f5f9;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 99px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
-
-        @media (max-width: 850px) {
-            .stats, .grid2, .grid2-equal, .settings-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NexMail — Email Campaign Platform</title>
+<meta name="description" content="Professional email campaign management platform"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+/* ═══════════════════════════════════════
+   DESIGN TOKENS
+═══════════════════════════════════════ */
+:root {
+  --brand:        #8b5cf6;
+  --brand-light:  #f3e8ff;
+  --brand-mid:    #ec4899;
+  --brand-dark:   #7c3aed;
+
+  --bg:           #f8fafc;
+  --surface:      #ffffff;
+  --surface2:     #f1f5f9;
+  --border:       #e2e8f0;
+  --border-light: #f1f5f9;
+
+  --text-primary: #0f172a;
+  --text-secondary:#475569;
+  --text-muted:   #94a3b8;
+  --text-hint:    #cbd5e1;
+
+  --success:      #059669;
+  --success-bg:   #ecfdf5;
+  --warn:         #d97706;
+  --warn-bg:      #fffbeb;
+  --danger:       #dc2626;
+  --danger-bg:    #fef2f2;
+  --info:         #2563eb;
+  --info-bg:      #eff6ff;
+
+  --sidebar-w:    230px;
+  --topbar-h:     60px;
+  --radius:       8px;
+  --radius-lg:    12px;
+  --shadow-sm:    0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+  --shadow:       0 4px 6px -1px rgba(0,0,0,.08), 0 2px 4px -1px rgba(0,0,0,.04);
+  --shadow-lg:    0 10px 15px -3px rgba(0,0,0,.08), 0 4px 6px -2px rgba(0,0,0,.04);
+
+  /* Legacy compat */
+  --accent: var(--brand);
+  --muted:  var(--text-muted);
+  --hint:   var(--text-hint);
+  --r:      var(--radius);
+  --card-bg:var(--surface);
+  --text:   var(--text-primary);
+  --danger-text: var(--danger);
+  --success-color: var(--success);
+}
+
+/* ═══════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══════════════════════════════════════
+   LAYOUT SHELL
+═══════════════════════════════════════ */
+.app-shell { display: flex; height: 100vh; overflow: hidden; }
+
+/* ═══════════════════════════════════════
+   SIDEBAR
+═══════════════════════════════════════ */
+.sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  height: 100vh;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 50;
+  transition: transform 0.3s ease, margin-left 0.3s ease;
+}
+.sidebar.collapsed {
+  transform: translateX(-100%);
+  margin-left: calc(-1 * var(--sidebar-w));
+}
+
+/* Brand */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  height: var(--topbar-h);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sidebar-logo {
+  width: 32px; height: 32px;
+  background: var(--brand);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.sidebar-logo svg { width: 18px; height: 18px; fill: #fff; }
+.sidebar-brand-name { font-size: 15px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.3px; }
+.sidebar-brand-sub  { font-size: 10px; color: var(--text-muted); }
+
+/* Nav */
+.sidebar-nav { flex: 1; overflow-y: auto; padding: 12px 8px; }
+.sidebar-nav::-webkit-scrollbar { width: 4px; }
+.sidebar-nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.nav-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 8px 8px 4px;
+  margin-top: 4px;
+}
+
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+  margin-bottom: 2px;
+}
+.nav-btn svg {
+  width: 16px; height: 16px; flex-shrink: 0;
+  stroke: currentColor; fill: none; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.nav-btn:hover { background: var(--surface2); color: var(--text-primary); }
+.nav-btn.active {
+  background: var(--brand-light);
+  color: var(--brand);
+  font-weight: 600;
+}
+.nav-btn.active svg { stroke: var(--brand); }
+
+/* Sidebar footer */
+.sidebar-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.footer-user { display: flex; align-items: center; gap: 8px; }
+.footer-avatar {
+  width: 28px; height: 28px;
+  background: var(--brand);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+}
+.footer-name  { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.footer-status{ font-size: 10px; color: var(--success); display: flex; align-items: center; gap: 3px; }
+.footer-status::before { content: ''; width: 6px; height: 6px; background: var(--success); border-radius: 50%; }
+
+.btn-logout {
+  display: flex; align-items: center; gap: 4px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.btn-logout:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
+.btn-logout svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+/* ═══════════════════════════════════════
+   MAIN CONTENT AREA
+═══════════════════════════════════════ */
+.main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+/* Topbar */
+.topbar {
+  height: var(--topbar-h);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  flex-shrink: 0;
+}
+.topbar-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.topbar-sub   { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+
+.clock-pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px;
+  background: var(--surface2);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.clock-dot { width: 6px; height: 6px; background: var(--success); border-radius: 50%; animation: blink 2s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* Quick stat pills in topbar */
+.topbar-stats { display: flex; gap: 6px; }
+.stat-pill {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px;
+  background: var(--surface2);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.stat-pill .pill-label { font-weight: 400; color: var(--text-muted); }
+
+/* Page body */
+.page-body { flex: 1; overflow-y: auto; padding: 24px; background: var(--bg); }
+.page-body::-webkit-scrollbar { width: 6px; }
+.page-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* Tab panes */
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* ═══════════════════════════════════════
+   CARDS
+═══════════════════════════════════════ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.card-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ═══════════════════════════════════════
+   GRIDS
+═══════════════════════════════════════ */
+.grid-2   { display: grid; grid-template-columns: 1fr 1fr;     gap: 16px; }
+.grid-3   { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.grid-4   { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
+.grid-12  { display: grid; grid-template-columns: 1fr 2fr;     gap: 16px; }
+.grid-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.section  { margin-bottom: 20px; }
+
+/* ═══════════════════════════════════════
+   FORM CONTROLS
+═══════════════════════════════════════ */
+.form-group { margin-bottom: 14px; }
+.form-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 5px;
+}
+.form-control, select.form-control, textarea.form-control {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--surface);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
+  appearance: none;
+}
+.form-control:focus, select.form-control:focus, textarea.form-control:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+}
+textarea.form-control { resize: vertical; min-height: 140px; }
+
+/* Select arrow */
+select.form-control {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+/* ═══════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════ */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 16px;
+  border: none; border-radius: var(--radius);
+  font-size: 13px; font-weight: 600; font-family: inherit;
+  cursor: pointer; transition: all 0.15s; text-decoration: none;
+  white-space: nowrap;
+}
+.btn svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+
+.btn-primary   { background: var(--brand); color: #fff; }
+.btn-primary:hover { background: var(--brand-dark); box-shadow: 0 2px 8px rgba(79,70,229,0.35); }
+
+.btn-secondary { background: var(--surface); color: var(--text-secondary); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--surface2); border-color: #cbd5e1; color: var(--text-primary); }
+
+.btn-success   { background: var(--success); color: #fff; }
+.btn-success:hover { background: #047857; }
+
+.btn-danger    { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #b91c1c; }
+
+.btn-ghost     { background: transparent; color: var(--text-secondary); border: 1px solid transparent; }
+.btn-ghost:hover { background: var(--surface2); border-color: var(--border); }
+
+.btn-sm  { padding: 5px 10px; font-size: 12px; }
+.btn-xs  { padding: 3px 8px;  font-size: 11px; }
+.btn-lg  { padding: 10px 22px; font-size: 14px; }
+.btn-full{ width: 100%; }
+
+/* ═══════════════════════════════════════
+   BADGES / STATUS
+═══════════════════════════════════════ */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; font-family: inherit;
+}
+.badge-running { background: #dcfce7; color: #15803d; }
+.badge-paused  { background: #fef3c7; color: #92400e; }
+.badge-done    { background: #dbeafe; color: #1e40af; }
+.badge-idle    { background: var(--surface2); color: var(--text-muted); }
+.badge-danger  { background: var(--danger-bg); color: var(--danger); }
+
+/* ═══════════════════════════════════════
+   TABLES
+═══════════════════════════════════════ */
+.table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table thead th {
+  background: var(--surface2);
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.data-table tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  vertical-align: middle;
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover td { background: var(--surface2); }
+
+/* Alias for legacy JS */
+.track-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.track-table thead tr { background: var(--surface2); }
+.track-table thead th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+.track-table tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border-light); }
+.track-table tbody tr:hover td { background: var(--surface2); }
+.reply-preview-row td { background: var(--info-bg); }
+.reply-preview-container { font-size: 12px; color: var(--info); padding: 4px 0; }
+
+/* ═══════════════════════════════════════
+   DASHBOARD — KPI CARDS
+═══════════════════════════════════════ */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--kpi-color, var(--brand));
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.kpi-label  { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
+.kpi-value  { font-size: 28px; font-weight: 800; color: var(--text-primary); line-height: 1; margin-bottom: 4px; }
+.kpi-meta   { font-size: 11px; color: var(--text-muted); }
+.kpi-icon   {
+  position: absolute; top: 16px; right: 16px;
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--kpi-icon-bg, var(--brand-light));
+  font-size: 16px;
+}
+
+/* ═══════════════════════════════════════
+   CHART BAR
+═══════════════════════════════════════ */
+.chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 160px;
+  padding: 8px 0 0 0;
+}
+
+/* ═══════════════════════════════════════
+   SCORE RING
+═══════════════════════════════════════ */
+.score-ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+}
+
+/* ═══════════════════════════════════════
+   MONITOR CARDS
+═══════════════════════════════════════ */
+.monitor-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+.monitor-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.monitor-card-title  { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.monitor-card-meta   { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+/* Legacy aliases */
+.monitor-sender-card    { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 10px; }
+.monitor-sender-header  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.monitor-sender-title   { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.monitor-sender-meta    { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+/* Progress bar */
+.prog-track { background: var(--surface2); border-radius: 99px; height: 6px; overflow: hidden; }
+.prog-fill  { height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-mid)); border-radius: 99px; transition: width 0.5s; }
+
+/* ═══════════════════════════════════════
+   LOGS BOX
+═══════════════════════════════════════ */
+.log-box {
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 11.5px;
+  line-height: 1.7;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid #1e293b;
+}
+.log-box::-webkit-scrollbar { width: 4px; }
+.log-box::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+.log-ok   { color: #86efac; }
+.log-err  { color: #fca5a5; }
+.log-warn { color: #fcd34d; }
+
+/* ═══════════════════════════════════════
+   TEMPLATE EDITOR
+═══════════════════════════════════════ */
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+  border-bottom: none;
+}
+.toolbar-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 12px; font-weight: 600; font-family: inherit;
+  cursor: pointer; transition: all 0.1s;
+}
+.toolbar-btn:hover { background: var(--surface2); border-color: #cbd5e1; color: var(--text-primary); }
+
+/* Attachment dropdown */
+.attach-wrap { position: relative; display: inline-block; z-index: 90; }
+.attach-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  min-width: 200px;
+  z-index: 200;
+  overflow: hidden;
+}
+.attach-dropdown a {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: background 0.1s;
+}
+.attach-dropdown a:hover { background: var(--surface2); color: var(--text-primary); }
+
+/* Score ring for template optimizer */
+.opt-ring-wrap { display: flex; align-items: center; justify-content: center; padding: 12px 0; }
+.opt-score-ring {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: conic-gradient(rgba(0,0,0,.05) 0deg, rgba(0,0,0,.05) 0deg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 800;
+  transition: background 0.4s;
+  position: relative;
+}
+.opt-score-ring::after {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  background: var(--surface);
+  border-radius: 50%;
+}
+#opt-score-txt { position: relative; z-index: 1; }
+
+.opt-classification-value { font-size: 12px; font-weight: 700; text-align: center; }
+.opt-classification-value.good    { color: var(--success); }
+.opt-classification-value.ok      { color: var(--warn); }
+.opt-classification-value.poor    { color: var(--danger); }
+
+.opt-suggestion-card {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.opt-suggestion-card.error   { background: var(--danger-bg); border-left: 3px solid var(--danger); }
+.opt-suggestion-card.warning { background: var(--warn-bg); border-left: 3px solid var(--warn); }
+.opt-suggestion-card.info    { background: var(--info-bg); border-left: 3px solid var(--info); }
+.opt-suggestion-msg { font-weight: 600; margin-bottom: 3px; color: var(--text-primary); }
+.opt-suggestion-rec { color: var(--text-secondary); }
+
+/* Template list */
+.template-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.template-card:hover { border-color: var(--brand); box-shadow: 0 0 0 2px rgba(79,70,229,0.1); }
+.template-card-name  { font-weight: 600; color: var(--text-primary); font-size: 13px; margin-bottom: 3px; }
+.template-card-subj  { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.template-card-meta  { font-size: 11px; color: var(--text-hint); margin-top: 5px; }
+
+/* Aliases for JS */
+.sender-item-card    { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; cursor: pointer; transition: all 0.15s; margin-bottom: 6px; }
+.sender-item-card:hover { border-color: var(--brand); }
+.sender-item-title   { font-weight: 600; color: var(--text-primary); font-size: 13px; margin-bottom: 3px; }
+.sender-item-subtitle{ font-size: 12px; color: var(--text-muted); }
+.sender-item-meta    { font-size: 11px; color: var(--text-hint); margin-top: 5px; display: flex; gap: 12px; }
+.sender-item-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+/* ═══════════════════════════════════════
+   SETTINGS
+═══════════════════════════════════════ */
+.rules-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.rules-table td { padding: 7px 10px; border-bottom: 1px solid var(--border-light); }
+.rules-table td:first-child { font-weight: 600; color: var(--text-secondary); width: 40%; }
+.rules-table td:last-child { color: var(--text-muted); }
+
+/* ═══════════════════════════════════════
+   MAPPING CHECKBOXES
+═══════════════════════════════════════ */
+.mapping-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.mapping-checkbox-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.1s;
+}
+.mapping-checkbox-item:hover { background: var(--surface2); }
+.mapping-checkbox-item input { accent-color: var(--brand); cursor: pointer; }
+
+/* ═══════════════════════════════════════
+   INFO / ALERT BOXES
+═══════════════════════════════════════ */
+.info-box {
+  background: var(--info-bg);
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #1e40af;
+  margin-bottom: 14px;
+}
+.warn-box {
+  background: var(--warn-bg);
+  border: 1px solid #fde68a;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--warn);
+  margin-bottom: 14px;
+}
+.success-box {
+  background: var(--success-bg);
+  border: 1px solid #a7f3d0;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--success);
+  margin-bottom: 14px;
+}
+
+/* Gmail warning alias */
+.gmail-note { background: var(--warn-bg); border: 1px solid #fde68a; border-radius: var(--radius); padding: 10px 14px; font-size: 12px; color: var(--warn); margin-bottom: 14px; display: none; }
+
+/* ═══════════════════════════════════════
+   DIVIDER
+═══════════════════════════════════════ */
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+/* ═══════════════════════════════════════
+   DRAFT PREVIEW
+═══════════════════════════════════════ */
+.email-preview-shell {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+.email-preview-header {
+  background: var(--surface2);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.email-preview-subject {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-light);
+}
+.email-preview-body {
+  padding: 20px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  min-height: 200px;
+}
+
+/* ═══════════════════════════════════════
+   PAGE SECTION HEADER
+═══════════════════════════════════════ */
+.page-section-header { margin-bottom: 20px; }
+.page-section-title  { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+.page-section-desc   { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+
+/* ═══════════════════════════════════════
+   CHECKBOX INLINE
+═══════════════════════════════════════ */
+.check-label {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; font-size: 13px; font-weight: 500;
+  color: var(--text-secondary); user-select: none;
+}
+.check-label input { accent-color: var(--brand); width: 15px; height: 15px; cursor: pointer; }
+
+/* ═══════════════════════════════════════
+   STAT MINI CARDS (Legacy compat)
+═══════════════════════════════════════ */
+.stat6 { display: none; }/* hide old stat row */
+
+/* Topbar mini stats (kept for JS references) */
+#stat-sent, #stat-rem, #stat-limit, #stat-status { display: inline; }
+#stat-prog { display: none; }
+
+/* ═══════════════════════════════════════
+   RESPONSIVE UTILS
+═══════════════════════════════════════ */
+.flex-row     { display: flex; align-items: center; gap: 8px; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.flex-wrap    { flex-wrap: wrap; }
+.gap-8  { gap: 8px; }
+.gap-12 { gap: 12px; }
+.mt-4   { margin-top: 4px; }
+.mt-8   { margin-top: 8px; }
+.mt-12  { margin-top: 12px; }
+.mt-16  { margin-top: 16px; }
+.mb-8   { margin-bottom: 8px; }
+.mb-12  { margin-bottom: 12px; }
+.mb-16  { margin-bottom: 16px; }
+.text-sm    { font-size: 12px; }
+.text-muted { color: var(--text-muted); }
+.text-brand { color: var(--brand); }
+.text-success{ color: var(--success); }
+.text-danger { color: var(--danger); }
+.text-warn   { color: var(--warn); }
+.fw-600 { font-weight: 600; }
+.fw-700 { font-weight: 700; }
+</style>
 </head>
 <body>
-    <div class="shell">
-        <div class="topbar">
-            <div class="brand">
-                <div class="brand-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/>
-                    </svg>
-                </div>
-                <span class="brand-name">VSD Finserv <span>Mailer & Optimizer</span></span>
-            </div>
-            <span class="clock-badge" id="clock">—</span>
-        </div>
 
-        <!-- Global Statistics -->
-        <div class="stats">
-            <div class="stat">
-                <div class="stat-label">Sent Today</div>
-                <div class="stat-value accent" id="stat-sent">—</div>
-                <div class="stat-sub">of daily limit</div>
-                <div class="prog-track">
-                    <div class="prog-fill" id="stat-prog" style="width: 0%"></div>
-                </div>
-            </div>
-            <div class="stat">
-                <div class="stat-label">Remaining</div>
-                <div class="stat-value" id="stat-rem">—</div>
-                <div class="stat-sub">emails today</div>
-            </div>
-            <div class="stat">
-                <div class="stat-label">Daily Limit</div>
-                <div class="stat-value" id="stat-limit">1500</div>
-                <div class="stat-sub">shared limit</div>
-            </div>
-            <div class="stat">
-                <div class="stat-label">System Status</div>
-                <div style="margin-top: 8px;" id="stat-status">
-                    <span class="badge badge-idle">Idle</span>
-                </div>
-            </div>
-        </div>
+<div class="app-shell">
 
-        <!-- Navigation Tabs -->
-        <div class="tabs" style="display:flex; justify-content:space-between; align-items:center;">
-            <div style="display:flex; gap:2px; flex-grow:1; flex-wrap:wrap;">
-                <button class="tab-btn active" onclick="switchTab('launch', this)">Launch Campaign</button>
-                <button class="tab-btn" onclick="switchTab('templates', this)">Templates</button>
-                <button class="tab-btn" onclick="switchTab('draft', this)">Draft Preview</button>
-                <button class="tab-btn" onclick="switchTab('monitor', this)">Live Monitor</button>
-                <button class="tab-btn" onclick="switchTab('tracking', this)">Email Tracking</button>
-                <button class="tab-btn" onclick="switchTab('settings', this)">Settings Panel</button>
-            </div>
-            <button class="btn btn-secondary btn-sm" style="color:var(--danger); border-color:var(--danger); font-size:12px; margin-left:12px; white-space:nowrap; padding:6px 12px; height:fit-content; background:transparent;" onclick="logout()">🚪 Logout</button>
-        </div>
+  <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+  <aside class="sidebar">
 
-
-        <!-- ── TAB 1: LAUNCH CAMPAIGN ────────────────────────────────────────── -->
-        <div class="tab-pane active" id="tab-launch">
-            <div class="grid2">
-                <div class="card">
-                    <div class="card-title">New Campaign</div>
-                    <div class="info-box">Upload any Excel list. Columns like 'Email', 'Owner Name', and 'Company Name' are detected automatically.</div>
-                    <div class="gmail-note" id="gmail-warning">This account will send via direct Gmail SMTP credentials. Please ensure Gmail App Password is configured.</div>
-                    
-                    <form action="/send-emails/" method="post" enctype="multipart/form-data" onsubmit="return confirm('Launch campaign?')">
-                        <div class="field">
-                            <label>Sender Account</label>
-                            <select name="sender_email" id="launch-sender" required onchange="filterTemplatesBySender()"></select>
-                        </div>
-                        <div class="field">
-                            <label>Template Category</label>
-                            <select name="category" id="launch-category" required></select>
-                        </div>
-                        <div class="field">
-                            <label>Excel File (.xlsx)</label>
-                            <input type="file" name="file" accept=".xlsx,.xls" required>
-                        </div>
-                        
-                        <div style="margin: 12px 0 6px 0;">
-                            <label style="display:flex; align-items:center; gap:8px; font-weight:600; cursor:pointer; font-size:13px; user-select:none;">
-                                <input type="checkbox" id="chk-schedule" name="is_scheduled" value="true" onchange="toggleScheduleBlock()">
-                                🕒 Set Trigger / Schedule Campaign
-                            </label>
-                        </div>
-                        
-                        <div id="schedule-block" style="display:none; padding:12px; background:var(--surface-lt); border:1px solid var(--border); border-radius:var(--r); margin-bottom:12px;">
-                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                                <div class="field" style="margin-bottom:0;">
-                                    <label style="font-size:11px;">Trigger Date</label>
-                                    <input type="date" id="sched-date" name="scheduled_date">
-                                </div>
-                                <div class="field" style="margin-bottom:0;">
-                                    <label style="font-size:11px;">Trigger Time</label>
-                                    <input type="time" id="sched-time" name="scheduled_time">
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-primary" style="margin-top: 10px; width:100%;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-                            Start / Schedule Campaign
-                        </button>
-                    </form>
-
-                </div>
-                <div class="card">
-                    <div class="card-title">Campaign Rules</div>
-                    <table class="rules-table">
-                        <tr><td>Working Hours</td><td>10:00 AM – 07:00 PM IST</td></tr>
-                        <tr><td>Send Delay</td><td>60–120s between emails</td></tr>
-                        <tr><td>Auto-Resume</td><td>Next day 10 AM if limit reached</td></tr>
-                        <tr><td>Format Checking</td><td>Deliverability rules checked on Template tab</td></tr>
-                        <tr><td>Diagnostics</td><td>
-                            <a href="/diagnose-gmail" target="_blank" style="color:var(--accent); font-weight:600; text-decoration:none;">Diagnose Network Ports</a>
-                        </td></tr>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- ── TAB 2: TEMPLATES & ANALYZER ───────────────────────────────────── -->
-        <div class="tab-pane" id="tab-templates">
-            <div class="grid2">
-                <div class="card">
-                    <div class="card-title">Add / Update Template</div>
-                    <div class="field">
-                        <label>Associate with Sender (Optional)</label>
-                        <select id="tmpl-sender-assoc"></select>
-                    </div>
-                    <div class="field">
-                        <label>Template Category Name</label>
-                        <input type="text" id="tmpl-cat" placeholder="e.g. Subsidy Incentives" oninput="toggleTemplateDetails()">
-                    </div>
-                    <div id="tmpl-details-section" style="display: none;">
-                        <div class="field">
-                            <label>Subject Line</label>
-                            <input type="text" id="tmpl-subject" placeholder="Email subject line..." oninput="queueAnalysis()">
-                        </div>
-                        <div class="field">
-                            <label>Email Body (Rich HTML / Plain Text)</label>
-                            <div style="display:flex; gap:6px; margin-bottom:6px; background:var(--surface-lt); border:1px solid var(--border); padding:6px; border-radius:6px 6px 0 0; border-bottom:none; flex-wrap:wrap;">
-                                <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-weight:bold; font-size:11px;" onclick="insertTextAtCursor('tmpl-body', '<b>', '</b>')">B</button>
-                                <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-style:italic; font-size:11px;" onclick="insertTextAtCursor('tmpl-body', '<i>', '</i>')">I</button>
-                                <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; text-decoration:underline; font-size:11px;" onclick="insertTextAtCursor('tmpl-body', '<u>', '</u>')">U</button>
-                                <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="insertTextAtCursor('tmpl-body', '<br>')">Line Break</button>
-                                <div style="position:relative; display:inline-block; z-index:90;">
-                                    <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="toggleAttachmentDropdown(event)">📎 Add Attachment ▾</button>
-                                    <div id="attachment-dropdown" style="display:none; position:absolute; left:0; top:24px; background:var(--card-bg, #ffffff); border:1px solid var(--border); border-radius:var(--r); box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:100; min-width:180px; padding:4px 0;">
-                                        <a href="#" style="display:block; padding:8px 12px; color:var(--text); text-decoration:none; font-size:12px; transition: background 0.2s;" onmouseover="this.style.background='var(--surface-lt)'" onmouseout="this.style.background='transparent'" onclick="triggerAttachmentUpload(event, 'image')">🖼️ Image (PNG, JPG, etc.)</a>
-                                        <a href="#" style="display:block; padding:8px 12px; color:var(--text); text-decoration:none; font-size:12px; transition: background 0.2s;" onmouseover="this.style.background='var(--surface-lt)'" onmouseout="this.style.background='transparent'" onclick="triggerAttachmentUpload(event, 'pdf')">📄 PDF Document</a>
-                                        <a href="#" style="display:block; padding:8px 12px; color:var(--text); text-decoration:none; font-size:12px; transition: background 0.2s;" onmouseover="this.style.background='var(--surface-lt)'" onmouseout="this.style.background='transparent'" onclick="triggerAttachmentUpload(event, 'excel')">📊 Spreadsheet (Excel/CSV)</a>
-                                        <a href="#" style="display:block; padding:8px 12px; color:var(--text); text-decoration:none; font-size:12px; transition: background 0.2s;" onmouseover="this.style.background='var(--surface-lt)'" onmouseout="this.style.background='transparent'" onclick="triggerAttachmentUpload(event, 'all')">📁 Any File format</a>
-                                    </div>
-                                </div>
-                                <input type="file" id="tmpl-attachment-file" style="display:none;" onchange="uploadTemplateAttachment()">
-
-                            </div>
-                            <textarea id="tmpl-body" placeholder="Dear {Owner Name}, from {Company Name}..." oninput="queueAnalysis()" style="border-radius:0 0 var(--r) var(--r);"></textarea>
-                        </div>
-
-                        <div style="display:flex; gap:10px;">
-                            <button class="btn btn-primary" onclick="saveTemplate()" style="flex-grow:1;">Save Template</button>
-                            <button class="btn btn-secondary" onclick="deleteTemplate()" id="btn-tmpl-delete" style="display:none; color:var(--danger);">Delete</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Live Deliverability Suggestions Panel -->
-                <div class="card">
-                    <div class="card-title">Deliverability Suggestions</div>
-                    <div class="opt-score-container">
-                        <div class="opt-score-radial" id="opt-score-ring">
-                            <span class="opt-score-val" id="opt-score-txt">—</span>
-                        </div>
-                        <div class="opt-classification">
-                            <div class="opt-classification-title">Predicted Category</div>
-                            <div class="opt-classification-value promotions" id="opt-class-txt">Promotions</div>
-                        </div>
-                    </div>
-                    <div class="opt-suggestions-list" id="opt-suggestions">
-                        <div style="color:var(--muted); font-size:13px; text-align:center; padding:20px;">
-                            Start entering subject & body to view suggestions.
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="card">
-                <div class="card-title">Saved Templates</div>
-                <div id="templates-list-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:14px;">
-                    <!-- Filled dynamically -->
-                </div>
-            </div>
-        </div>
-
-        <!-- ── TAB 3: DRAFT PREVIEW ────────────────────────────────────────── -->
-        <div class="tab-pane" id="tab-draft">
-            <div class="grid2">
-                <div class="card">
-                    <div class="card-title">Select Template & Variables</div>
-                    <div class="field">
-                        <label>Template</label>
-                        <select id="draft-template" onchange="loadDraftPreview()"></select>
-                    </div>
-                    <div class="field">
-                        <label>Test Variables (JSON format)</label>
-                        <textarea id="draft-variables" placeholder='{
-  "Owner Name": "Jenil Koshti",
-  "Company Name": "ABC Textiles Ltd",
-  "Location": "Ahmedabad",
-  "Business Type": "textile manufacturing"
-}' style="height: 140px;" oninput="previewDraft()"></textarea>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card-title">Visual Email Preview</div>
-                    <div style="margin-bottom: 12px; padding: 10px 14px; background:var(--surface-lt); border-radius:var(--r); border:1px solid var(--border);">
-                        <span style="color:var(--muted); font-size:12px; font-weight:600; text-transform:uppercase;">Subject:</span>
-                        <span id="prev-subject-line" style="font-weight:600; margin-left: 8px; color:var(--accent);">—</span>
-                    </div>
-                    <div style="background:white; color:#333; padding:20px; border-radius:var(--r); min-height: 250px; overflow-y:auto; font-family:Arial,sans-serif; border:1px solid var(--border);" id="prev-body-box">
-                        Select a template to view preview.
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ── TAB 4: LIVE MONITOR ─────────────────────────────────────────── -->
-        <div class="tab-pane" id="tab-monitor">
-            <div class="grid2">
-                <div class="card">
-                    <div class="card-title">Active Bulk Runs</div>
-                    <div class="monitor-senders-list" id="monitor-campaigns-list">
-                        <div style="color:var(--muted); font-size:13px;">No active runs.</div>
-                    </div>
-                    
-                    <div class="card-title" style="margin-top:24px; border-top:1px solid var(--border); padding-top:16px;">Upcoming Scheduled Triggers</div>
-                    <div id="scheduled-triggers-list" style="font-size:13px; color:var(--muted); max-height:220px; overflow-y:auto; padding-right:4px;">
-                        <div style="color:var(--muted); font-size:13px; text-align:center; padding:12px;">No upcoming triggers.</div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-title">Real-time Activity Log</div>
-                    <div class="log-box" id="monitor-logs">Waiting for log updates...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ── TAB 5: EMAIL TRACKING ────────────────────────────────────────── -->
-        <div class="tab-pane" id="tab-tracking">
-            <div class="card">
-                <!-- Tracking URL Setup Notice -->
-                <div class="info-box" id="tracking-url-warning" style="display:none; background-color:#fffbeb; border-color:#fef3c7; color:#b45309; margin-bottom:15px; font-size:13px; line-height:1.5;">
-                    ⚠️ <strong>Tracking Configuration Warning:</strong> Your Tracking Base URL is either empty or configured with a local/non-secure address. To track email opens from external recipients, you must configure a public HTTPS URL in the Settings tab.
-                </div>
-
-                <!-- ── SUMMARY STAT CARDS ── -->
-                <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:12px; margin-bottom:20px;">
-                    <div style="background:rgba(5,150,105,0.06);border:1px solid rgba(5,150,105,0.18);border-radius:var(--r);padding:16px;text-align:center;">
-                        <div style="font-size:26px;font-weight:700;color:var(--accent);" id="tr-total">—</div>
-                        <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:4px;">Total Sent</div>
-                    </div>
-                    <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.18);border-radius:var(--r);padding:16px;text-align:center;">
-                        <div style="font-size:26px;font-weight:700;color:#2563eb;" id="tr-opened">—</div>
-                        <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:4px;">Opened</div>
-                    </div>
-                    <div style="background:rgba(5,150,105,0.09);border:1px solid rgba(5,150,105,0.22);border-radius:var(--r);padding:16px;text-align:center;">
-                        <div style="font-size:26px;font-weight:700;color:var(--accent);" id="tr-replied">—</div>
-                        <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:4px;">Replied</div>
-                    </div>
-                    <div style="background:rgba(220,38,38,0.05);border:1px solid rgba(220,38,38,0.15);border-radius:var(--r);padding:16px;text-align:center;">
-                        <div style="font-size:26px;font-weight:700;color:var(--danger);" id="tr-48h">—</div>
-                        <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:4px;">Not Opened 48h</div>
-                    </div>
-                    <div style="background:rgba(234,179,8,0.06);border:1px solid rgba(234,179,8,0.2);border-radius:var(--r);padding:16px;text-align:center;">
-                        <div style="font-size:26px;font-weight:700;color:#ca8a04;" id="tr-open-rate">—</div>
-                        <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:4px;">Open Rate</div>
-                    </div>
-                </div>
-
-                <!-- ── PER-SENDER BREAKDOWN TABLE ── -->
-                <div style="margin-bottom:20px;">
-                    <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">Per Sender Breakdown</div>
-                    <div style="overflow-x:auto;">
-                        <table class="track-table" style="font-size:13px;">
-                            <thead>
-                                <tr>
-                                    <th>Sender Account</th>
-                                    <th style="text-align:center;">Sent</th>
-                                    <th style="text-align:center;">Opened</th>
-                                    <th style="text-align:center;">Replied</th>
-                                    <th style="text-align:center;">Not Opened 48h</th>
-                                    <th style="text-align:center;">Open Rate</th>
-                                </tr>
-                            </thead>
-                            <tbody id="per-sender-table-body">
-                                <tr><td colspan="6" style="text-align:center;padding:16px;color:var(--muted);">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- ── FILTERS ROW ── -->
-                <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px;padding:14px;background:var(--surface-lt);border-radius:var(--r);border:1px solid var(--border);">
-                    <!-- Date From -->
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <label style="font-size:12px;color:var(--muted);font-weight:600;">FROM</label>
-                        <input type="date" id="tr-date-from" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;" onchange="loadTracking(currentFilter)">
-                    </div>
-                    <!-- Date To -->
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <label style="font-size:12px;color:var(--muted);font-weight:600;">TO</label>
-                        <input type="date" id="tr-date-to" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;" onchange="loadTracking(currentFilter)">
-                    </div>
-                    <!-- Sender Filter -->
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <label style="font-size:12px;color:var(--muted);font-weight:600;">SENDER</label>
-                        <select id="tr-sender-filter" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;" onchange="loadTracking(currentFilter)">
-                            <option value="">All Senders</option>
-                        </select>
-                    </div>
-                    <!-- Clear Filters -->
-                    <button class="btn btn-secondary btn-sm" onclick="clearTrackingFilters()">Clear Filters</button>
-                    <!-- Spacer -->
-                    <div style="flex:1;"></div>
-                    <!-- Status Filters -->
-                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                        <button class="btn btn-secondary btn-sm" id="tr-btn-all" onclick="loadTracking('all')" style="background:var(--accent);color:#fff;">All</button>
-                        <button class="btn btn-secondary btn-sm" id="tr-btn-opened" onclick="loadTracking('opened')">Opened</button>
-                        <button class="btn btn-secondary btn-sm" id="tr-btn-replied" onclick="loadTracking('replied')">Replied</button>
-                        <button class="btn btn-secondary btn-sm" id="tr-btn-not_opened" onclick="loadTracking('not_opened')">Not Opened</button>
-                        <button class="btn btn-secondary btn-sm" id="tr-btn-alert_48h" onclick="loadTracking('alert_48h')">48h Alert</button>
-                    </div>
-                    <!-- Refresh & Download -->
-                    <button class="btn btn-secondary btn-sm" onclick="refreshTracking()">↺ Refresh</button>
-                    <button class="btn btn-sm" id="tr-download-btn" onclick="downloadTracking()" style="background:var(--accent);color:#fff;border:none;">⬇ Download CSV</button>
-                </div>
-
-                <!-- ── EMAIL TRACKING TABLE ── -->
-                <div style="overflow-x:auto;">
-                    <table class="track-table">
-                        <thead>
-                            <tr>
-                                <th>Recipient</th>
-                                <th>Company</th>
-                                <th>Sender Account</th>
-                                <th>Sent Date</th>
-                                <th style="text-align:center;">Status</th>
-                                <th style="text-align:center;">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tracking-table-body">
-                            <!-- Filled dynamically -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- ── REPLIES INBOX ── -->
-            <div class="card" style="margin-top:20px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-                    <div class="card-title" style="margin-bottom:0;">&#128236; Replies Inbox</div>
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;">
-                            <input type="checkbox" id="show-bounces-chk" onchange="loadReplies()">
-                            Show bounces
-                        </label>
-                        <button class="btn btn-secondary btn-sm" onclick="loadReplies()">&#8635; Refresh</button>
-                    </div>
-                </div>
-                <div id="replies-inbox-container">
-                    <div style="text-align:center;color:var(--muted);padding:24px;font-size:13px;">Loading replies...</div>
-                </div>
-            </div>
-
-            <!-- ── IMAP PASSWORD SETUP ── -->
-            <div class="card" style="margin-top:20px;">
-                <div class="card-title">&#128295; Enable Reply Detection for @mybankloan.ai Accounts</div>
-                <div style="background:rgba(234,179,8,0.07);border:1px solid rgba(234,179,8,0.25);border-radius:var(--r);padding:14px;font-size:13px;color:#92400e;margin-bottom:16px;line-height:1.6;">
-                    &#9888; <strong>IMAP password is required</strong> for admin@, cayagya@, bl@, invest@mybankloan.ai to detect replies.
-                    Enter the same password you use to log in at <strong>mail.mybankloan.ai</strong> webmail.
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end;">
-                    <div class="field" style="margin-bottom:0;">
-                        <label>Sender Account</label>
-                        <select id="imap-pwd-email">
-                            <option value="admin@mybankloan.ai">admin@mybankloan.ai</option>
-                            <option value="cayagya@mybankloan.ai">cayagya@mybankloan.ai</option>
-                            <option value="bl@mybankloan.ai">bl@mybankloan.ai</option>
-                            <option value="invest@mybankloan.ai">invest@mybankloan.ai</option>
-                        </select>
-                    </div>
-                    <div class="field" style="margin-bottom:0;">
-                        <label>Email Hosting Password (IMAP)</label>
-                        <input type="password" id="imap-pwd-value" placeholder="Your webmail password">
-                    </div>
-                </div>
-                <button class="btn" style="margin-top:12px;" onclick="saveImapPassword()">&#128190; Save IMAP Password</button>
-                <div id="imap-pwd-status" style="margin-top:10px;font-size:13px;"></div>
-            </div>
-
-        </div>
-
-        <!-- ── TAB 6: SETTINGS PANEL ────────────────────────────────────────── -->
-        <div class="tab-pane" id="tab-settings">
-            <div class="settings-grid">
-                <!-- Manage Senders List & Form -->
-                <div>
-                    <div class="card">
-                        <div class="card-title">Sender Accounts</div>
-                        <div id="settings-senders-list" style="max-height: 400px; overflow-y:auto; padding-right:4px;">
-                            <!-- Filled dynamically -->
-                        </div>
-                    </div>
-                    
-                    <div class="card">
-                        <div class="card-title" id="sender-form-title">Add Sender Account</div>
-                        <input type="hidden" id="snd-is-edit" value="false">
-                        
-                        <div class="field">
-                            <label>Email Address</label>
-                            <input type="text" id="snd-email" placeholder="e.g. admin@mybankloan.ai">
-                        </div>
-                        <div class="field">
-                            <label>Display Sender Name</label>
-                            <input type="text" id="snd-display-name" placeholder="e.g. VSD Finserv Pvt. Ltd.">
-                        </div>
-                        <div class="field">
-                            <label>Provider Type</label>
-                            <select id="snd-provider" onchange="toggleProviderSettings()">
-                                <option value="brevo">Brevo Transactional API</option>
-                                <option value="smtp">Custom SMTP Server / Gmail</option>
-                            </select>
-                        </div>
-                        
-                        <!-- Brevo API key field -->
-                        <div class="field" id="snd-brevo-block">
-                            <label>Brevo API Key</label>
-                            <input type="password" id="snd-api-key" placeholder="xkeysib-...">
-                        </div>
-                        
-                        <!-- Custom SMTP fields -->
-                        <div id="snd-smtp-block" style="display:none;">
-                            <div class="grid2-equal" style="gap:10px;">
-                                <div class="field">
-                                    <label>SMTP Host</label>
-                                    <input type="text" id="snd-smtp-host" placeholder="smtp.gmail.com">
-                                </div>
-                                <div class="field">
-                                    <label>SMTP Port</label>
-                                    <input type="number" id="snd-smtp-port" placeholder="587">
-                                </div>
-                            </div>
-                            <div class="field">
-                                <label>SMTP Password (App Password)</label>
-                                <input type="password" id="snd-smtp-pass" placeholder="••••••••••••••••">
-                            </div>
-                        </div>
-                        
-                        <!-- IMAP Incoming Settings (Required for Reply Tracking) -->
-                        <div class="card-title" style="font-size:12px; margin-top:20px; border-bottom:1px solid var(--border); padding-bottom:8px;">Incoming Poller (IMAP Settings for replies)</div>
-                        <div class="grid2-equal" style="gap:10px;">
-                            <div class="field">
-                                <label>IMAP Host</label>
-                                <input type="text" id="snd-imap-host" placeholder="imap.gmail.com">
-                            </div>
-                            <div class="field">
-                                <label>IMAP Port</label>
-                                <input type="number" id="snd-imap-port" placeholder="993">
-                            </div>
-                        </div>
-                        <div class="field">
-                            <label>IMAP Password</label>
-                            <input type="password" id="snd-imap-pass" placeholder="••••••••••••••••">
-                        </div>
-                        
-                        <!-- Limits and Active -->
-                        <div class="grid2-equal" style="gap:10px; align-items:center;">
-                            <div class="field">
-                                <label>Daily Email Limit</label>
-                                <input type="number" id="snd-limit" value="1500">
-                            </div>
-                            <div class="field" style="display:flex; flex-direction:column; gap:5px; margin-top:16px;">
-                                <div style="display:flex; align-items:center; gap:10px;">
-                                    <input type="checkbox" id="snd-active" checked style="width:18px; height:18px; accent-color:var(--accent);">
-                                    <label for="snd-active" style="margin-bottom:0; cursor:pointer;">Account Active</label>
-                                </div>
-                                <div style="display:flex; align-items:center; gap:10px;">
-                                    <input type="checkbox" id="snd-skip-test" style="width:18px; height:18px; accent-color:var(--accent);">
-                                    <label for="snd-skip-test" style="margin-bottom:0; cursor:pointer; font-weight:bold; color:var(--text);">Skip connection test on save</label>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Delay settings (seconds) -->
-                        <div class="grid2-equal" style="gap:10px; margin-top:10px;">
-                            <div class="field">
-                                <label>Min Delay between emails (sec)</label>
-                                <input type="number" id="snd-delay-min" value="60">
-                            </div>
-                            <div class="field">
-                                <label>Max Delay between emails (sec)</label>
-                                <input type="number" id="snd-delay-max" value="120">
-                            </div>
-                        </div>
-                        
-                        <div style="display:flex; gap:10px; margin-top:10px;">
-                            <button class="btn btn-primary" onclick="saveSenderAccount()">Save Sender</button>
-                            <button class="btn btn-secondary" onclick="resetSenderForm()" id="btn-cancel-edit" style="display:none;">Cancel</button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Map Senders to Templates -->
-                <div>
-                    <div class="card">
-                        <div class="card-title">Template Sender Mapping</div>
-                        <div class="info-box">Select a sender account, then check which template categories this sender email is allowed to send. Mappings update automatically.</div>
-                        <div class="field">
-                            <label>Choose Sender Account</label>
-                            <select id="map-sender-select" onchange="loadSenderTemplateMappings()"></select>
-                        </div>
-                        <label style="display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:8px; text-transform:uppercase;">Mapped Templates</label>
-                        <div class="mapping-checklist" id="map-templates-checklist">
-                            <!-- Filled dynamically -->
-                        </div>
-                    </div>
-
-                    <!-- Global Settings -->
-                    <div class="card" style="margin-top: 20px;">
-                        <div class="card-title">Global Settings</div>
-                        <div class="info-box">Configure the tracking base URL (used to rewrite the tracking pixel image links for remote computers) and the system access password.</div>
-                        <div class="field">
-                            <label>Tracking Base URL</label>
-                            <input type="text" id="setting-tracking-url" placeholder="e.g. https://xyz.ngrok-free.app" autocomplete="off">
-                        </div>
-                        <div class="field">
-                            <label>System Password</label>
-                            <input type="password" id="setting-password" placeholder="System access password" autocomplete="new-password">
-                        </div>
-                        <div style="margin-top: 10px;">
-                            <button class="btn btn-primary" onclick="saveGlobalSettings()">Save Settings</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
+    <!-- Brand -->
+    <div class="sidebar-brand">
+      <div class="sidebar-logo">
+        <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+      </div>
+      <div>
+        <div class="sidebar-brand-name">NexMail</div>
+        <div class="sidebar-brand-sub">Campaign Platform</div>
+      </div>
     </div>
 
-    <script>
+    <!-- Nav -->
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Overview</div>
+
+      <button class="nav-btn active" id="nav-dashboard" onclick="switchTab('dashboard',this)">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </button>
+
+      <div class="nav-section-label" style="margin-top:12px;">Campaigns</div>
+
+      <button class="nav-btn" id="nav-launch" onclick="switchTab('launch',this)">
+        <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        Launch Campaign
+      </button>
+
+      <button class="nav-btn" id="nav-templates" onclick="switchTab('templates',this)">
+        <svg viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Templates
+      </button>
+
+      <button class="nav-btn" id="nav-draft" onclick="switchTab('draft',this)">
+        <svg viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+        Draft Preview
+      </button>
+
+      <div class="nav-section-label" style="margin-top:12px;">Analytics</div>
+
+      <button class="nav-btn" id="nav-monitor" onclick="switchTab('monitor',this)">
+        <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Live Monitor
+      </button>
+
+      <button class="nav-btn" id="nav-tracking" onclick="switchTab('tracking',this)">
+        <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+        Email Tracking
+      </button>
+
+      <div class="nav-section-label" style="margin-top:12px;">System</div>
+
+      <button class="nav-btn" id="nav-settings" onclick="switchTab('settings',this)">
+        <svg viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Settings
+      </button>
+    </nav>
+
+    <!-- Footer -->
+    <div class="sidebar-footer">
+      <div class="footer-user">
+        <div class="footer-avatar">A</div>
+        <div>
+          <div class="footer-name">Admin</div>
+          <div class="footer-status">Online</div>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="logout()" title="Logout">
+        <svg viewBox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        Logout
+      </button>
+    </div>
+
+  </aside>
+
+  <!-- ═══════════════════ MAIN CONTENT ═══════════════════ -->
+  <div class="main-content">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button class="btn btn-ghost btn-sm" onclick="toggleSidebar()" style="padding:6px; color:var(--text); margin-right:4px;" title="Toggle Sidebar">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+        <div>
+          <div class="topbar-title" id="current-page-title">Dashboard</div>
+          <div class="topbar-sub">Welcome back, Admin</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <!-- Search Bar -->
+        <div class="topbar-search" style="position:relative; margin-right: 12px;">
+          <input type="text" placeholder="Search campaigns..." class="form-control" style="border-radius:20px; padding:6px 16px 6px 32px; width: 220px; font-size:12px; background:var(--surface2);">
+          <svg style="position:absolute; left:10px; top:8px; width:14px; height:14px; stroke:var(--text-muted); fill:none; stroke-width:2;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <!-- Quick stats -->
+        <div class="topbar-stats">
+          <div class="stat-pill">
+            <span class="pill-label">Sent</span>
+            <span id="stat-sent" style="color:var(--brand);font-weight:700;">—</span>
+          </div>
+          <div class="stat-pill">
+            <span class="pill-label">Left</span>
+            <span id="stat-rem" style="color:var(--success);font-weight:700;">—</span>
+          </div>
+          <div class="stat-pill" id="stat-status">
+            <span class="badge badge-idle">Idle</span>
+          </div>
+        </div>
+        <!-- Clock -->
+        <div class="clock-pill">
+          <span class="clock-dot"></span>
+          <span id="clock">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Body -->
+    <div class="page-body">
+
+      <!-- ════════════════════════════════════════════════ -->
+      <!--  TAB: DASHBOARD                                  -->
+      <!-- ════════════════════════════════════════════════ -->
+      <div class="tab-pane active" id="tab-dashboard">
+
+        <!-- Page header -->
+        <div class="page-section-header">
+          <div class="page-section-title">Executive Overview</div>
+          <div class="page-section-desc">All-time campaign performance metrics for management.</div>
+        </div>
+
+        <!-- KPI Row -->
+        <div class="kpi-grid">
+          <div class="kpi-card" style="--kpi-color:#6366f1;--kpi-icon-bg:#eef2ff;">
+            <div class="kpi-label">Open Rate</div>
+            <div class="kpi-value" id="kpi-open-rate">—%</div>
+            <div class="kpi-meta">Avg. across all campaigns</div>
+            <div class="kpi-icon">📬</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color:#059669;--kpi-icon-bg:#ecfdf5;">
+            <div class="kpi-label">Reply Rate</div>
+            <div class="kpi-value" id="kpi-reply-rate">—%</div>
+            <div class="kpi-meta">Positive responses</div>
+            <div class="kpi-icon">💬</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color:#d97706;--kpi-icon-bg:#fffbeb;">
+            <div class="kpi-label">Total Sent</div>
+            <div class="kpi-value" id="kpi-total-sent">—</div>
+            <div class="kpi-meta">All-time emails dispatched</div>
+            <div class="kpi-icon">📨</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color:#dc2626;--kpi-icon-bg:#fef2f2;">
+            <div class="kpi-label">Bounce Rate</div>
+            <div class="kpi-value" id="kpi-bounce-rate">—%</div>
+            <div class="kpi-meta">Hard + soft bounces</div>
+            <div class="kpi-icon">⚠️</div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid-2 mb-16" style="align-items:start;">
+
+          <!-- Activity chart -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">📈 Email Activity — Last 7 Days</div>
+                <div class="card-subtitle">Sends vs. opens by day of week</div>
+              </div>
+              <div class="flex-row text-sm text-muted">
+                <span style="display:flex;align-items:center;gap:4px;"><span style="width:9px;height:9px;background:#6366f1;border-radius:2px;display:inline-block;"></span>Sent</span>
+                <span style="display:flex;align-items:center;gap:4px;"><span style="width:9px;height:9px;background:#10b981;border-radius:2px;display:inline-block;"></span>Opened</span>
+              </div>
+            </div>
+            <div class="chart-bars" id="activity-chart"></div>
+          </div>
+
+          <!-- Delivery score ring -->
+          <div class="card" style="display:flex;flex-direction:column;">
+            <div class="card-header">
+              <div>
+                <div class="card-title">🎯 Delivery Health Score</div>
+                <div class="card-subtitle">Based on open rate performance</div>
+              </div>
+            </div>
+            <div class="score-ring" style="flex:1;justify-content:center;">
+              <div style="position:relative;width:130px;height:130px;">
+                <svg viewBox="0 0 36 36" style="width:130px;height:130px;transform:rotate(-90deg);">
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f1f5f9" stroke-width="2.5"/>
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-dasharray="92 100" stroke-linecap="round" id="score-arc"/>
+                </svg>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;">
+                  <span style="font-size:30px;font-weight:800;color:#0f172a;" id="delivery-score-val">92</span>
+                  <span style="font-size:10px;color:#94a3b8;">/100</span>
+                </div>
+              </div>
+              <div style="font-size:14px;font-weight:700;color:#6366f1;margin-top:14px;">Excellent</div>
+              <div style="font-size:12px;color:#94a3b8;text-align:center;margin-top:4px;">Templates are well-optimized</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Row -->
+        <div class="grid-3">
+
+          <!-- Top Templates -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">🏆 Top Templates by Opens</div>
+            </div>
+            <div id="top-templates-list">
+              <div class="text-muted text-sm">Loading...</div>
+            </div>
+          </div>
+
+          <!-- Sender Quota -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">📬 Sender Quota — Today</div>
+            </div>
+            <div id="sender-quota-list" style="display:flex;flex-direction:column;gap:12px;">
+              <div class="text-muted text-sm">Loading senders...</div>
+            </div>
+          </div>
+
+          <!-- Recent Campaigns -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">📅 Recent Campaigns</div>
+            </div>
+            <div id="recent-campaigns-list">
+              <div class="text-muted text-sm">Loading...</div>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /tab-dashboard -->
+
+
+      <!-- ════════════════════════════════════════════════ -->
+      <!--  TAB: LAUNCH CAMPAIGN                            -->
+      <!-- ════════════════════════════════════════════════ -->
+      <div class="tab-pane" id="tab-launch">
+
+        <div class="page-section-header">
+          <div class="page-section-title">Launch Campaign</div>
+          <div class="page-section-desc">Upload your contacts list and send a targeted email campaign.</div>
+        </div>
+
+        <div class="grid-2" style="align-items:start;">
+
+          <!-- Launch Form -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">⚡ New Campaign</div>
+            </div>
+
+            <div class="info-box">
+              Upload any Excel list. Columns like <strong>Email</strong>, <strong>Owner Name</strong>, and <strong>Company Name</strong> are detected automatically.
+            </div>
+            <div class="gmail-note" id="gmail-warning">
+              ⚠️ This account sends via Gmail SMTP. Please ensure an App Password is configured.
+            </div>
+
+            <form action="/send-emails/" method="post" enctype="multipart/form-data" onsubmit="return confirm('Launch this campaign now?')">
+
+              <div class="form-group">
+                <label class="form-label">Sender Account</label>
+                <select name="sender_email" id="launch-sender" class="form-control" required onchange="filterTemplatesBySender()"></select>
+              </div>
+              
+              <div class="form-group">
+                <label class="form-label">Campaign Name (Optional)</label>
+                <input type="text" name="campaign_name" class="form-control" placeholder="Leave blank to auto-generate">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Template Category</label>
+                <select name="category" id="launch-category" class="form-control" required></select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Recipients File (.xlsx)</label>
+                <input type="file" name="file" accept=".xlsx,.xls" required class="form-control" style="padding:6px 12px;cursor:pointer;">
+              </div>
+
+              <!-- Trigger toggle -->
+              <div style="padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;">
+                <label class="check-label">
+                  <input type="checkbox" id="chk-schedule" name="is_scheduled" value="true" onchange="toggleScheduleBlock()">
+                  🕒 Schedule this campaign (set trigger date &amp; time)
+                </label>
+
+                <div id="schedule-block" style="display:none;margin-top:12px;">
+                  <div class="grid-2" style="gap:10px;">
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label">Trigger Date</label>
+                      <input type="date" id="sched-date" name="scheduled_date" class="form-control">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label">Trigger Time</label>
+                      <input type="time" id="sched-time" name="scheduled_time" class="form-control">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary btn-full btn-lg">
+                <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                Start / Schedule Campaign
+              </button>
+            </form>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <!-- Campaign Rules -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">📋 Campaign Rules</div>
+              </div>
+              <table class="rules-table">
+                <tr><td>Working Hours</td><td>10:00 AM – 7:00 PM IST</td></tr>
+                <tr><td>Send Delay</td><td>60–120 seconds between emails</td></tr>
+                <tr><td>Daily Limit</td><td>300 emails per sender account</td></tr>
+                <tr><td>Auto-Resume</td><td>Next day 10 AM if limit reached</td></tr>
+                <tr><td>Format Check</td><td>Checked in Templates tab</td></tr>
+                <tr><td>Diagnostics</td>
+                  <td><a href="/diagnose-gmail" target="_blank" class="text-brand" style="font-weight:600;text-decoration:none;">Diagnose Network Ports →</a></td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- Scheduled Triggers -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">🕒 Upcoming Triggers</div>
+              </div>
+              <div id="scheduled-triggers-list">
+                <div class="text-muted text-sm" style="text-align:center;padding:12px;">No upcoming triggers.</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /tab-launch -->
+
+
+      <!-- ════════════════════════════════════════════════ -->
+      <!--  TAB: TEMPLATES                                  -->
+      <!-- ════════════════════════════════════════════════ -->
+      <div class="tab-pane" id="tab-templates">
+
+        <div class="page-section-header">
+          <div class="page-section-title">Email Templates</div>
+          <div class="page-section-desc">Create, edit and manage your campaign email templates.</div>
+        </div>
+
+        <div class="grid-2" style="align-items:start;">
+
+          <!-- Editor -->
+          <div>
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">✏️ Add / Edit Template</div>
+                <button class="btn btn-ghost btn-sm" onclick="resetTemplateForm()">Clear Form</button>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Associate with Sender (optional)</label>
+                <select id="tmpl-sender-assoc" class="form-control"></select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Template Category Name</label>
+                <input type="text" id="tmpl-cat" class="form-control" placeholder="e.g. Subsidy Incentives" oninput="toggleTemplateDetails()">
+              </div>
+
+              <div id="tmpl-details-section" style="display:none;">
+
+                <div class="form-group">
+                  <label class="form-label">Subject Line</label>
+                  <input type="text" id="tmpl-subject" class="form-control" placeholder="Enter email subject…" oninput="queueAnalysis()">
+                </div>
+
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label">Email Body (Rich HTML / Plain Text)</label>
+
+                  <!-- Formatting toolbar -->
+                  <div class="toolbar-row">
+                    <button type="button" class="toolbar-btn" style="font-weight:900;" onclick="insertTextAtCursor('tmpl-body','<b>','</b>')">B</button>
+                    <button type="button" class="toolbar-btn" style="font-style:italic;" onclick="insertTextAtCursor('tmpl-body','<i>','</i>')">I</button>
+                    <button type="button" class="toolbar-btn" style="text-decoration:underline;" onclick="insertTextAtCursor('tmpl-body','<u>','</u>')">U</button>
+                    <button type="button" class="toolbar-btn" onclick="insertTextAtCursor('tmpl-body','<br>')">↵ Break</button>
+
+                    <!-- Attachment dropdown -->
+                    <div class="attach-wrap">
+                      <button type="button" class="toolbar-btn" onclick="toggleAttachmentDropdown(event)">📎 Add Attachment ▾</button>
+                      <div class="attach-dropdown" id="attachment-dropdown">
+                        <a href="#" onclick="triggerAttachmentUpload(event,'image')">🖼️ Image (PNG, JPG, GIF…)</a>
+                        <a href="#" onclick="triggerAttachmentUpload(event,'pdf')">📄 PDF Document</a>
+                        <a href="#" onclick="triggerAttachmentUpload(event,'excel')">📊 Excel / CSV</a>
+                        <a href="#" onclick="triggerAttachmentUpload(event,'all')">📁 Any File Format</a>
+                      </div>
+                    </div>
+                    <input type="file" id="tmpl-attachment-file" style="display:none;" onchange="uploadTemplateAttachment()">
+                  </div>
+
+                  <textarea id="tmpl-body" class="form-control" style="border-radius:0 0 var(--radius) var(--radius);border-top:none;" rows="10" placeholder="Write your email body here. Use {Owner Name}, {Company Name} for personalization…" oninput="queueAnalysis()"></textarea>
+                </div>
+
+                <div class="flex-row mt-12" style="justify-content:flex-end;gap:8px;">
+                  <button type="button" id="btn-tmpl-delete" class="btn btn-danger btn-sm" style="display:none;" onclick="deleteTemplate()">Delete</button>
+                  <button type="button" class="btn btn-primary" onclick="saveTemplate()">
+                    <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    Save Template
+                  </button>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Deliverability Analyzer -->
+            <div class="card mt-16">
+              <div class="card-header">
+                <div class="card-title">🔍 Deliverability Analyzer</div>
+                <div id="opt-class-txt" class="opt-classification-value">—</div>
+              </div>
+              <div class="opt-ring-wrap">
+                <div style="text-align:center;">
+                  <div class="opt-score-ring" id="opt-score-ring"><span id="opt-score-txt" style="position:relative;z-index:1;">—</span></div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Inbox Score</div>
+                </div>
+              </div>
+              <div id="opt-suggestions">
+                <div class="text-muted text-sm" style="text-align:center;padding:12px 0;">Enter subject &amp; body to see suggestions.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Template list -->
+          <div class="card" style="height:fit-content;">
+            <div class="card-header">
+              <div class="card-title">📋 All Templates</div>
+              <button class="btn btn-ghost btn-sm" onclick="loadTemplates()">↻ Refresh</button>
+            </div>
+            <div id="templates-list-container" style="display:flex;flex-direction:column;gap:6px;max-height:600px;overflow-y:auto;">
+              <div class="text-muted text-sm" style="text-align:center;padding:20px;">Loading templates…</div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /tab-templates -->
+
+
+      <!-- ════════════════════════════════════════════════ -->
+      <!--  TAB: DRAFT PREVIEW                              -->
+      <!-- ════════════════════════════════════════════════ -->
+      <div class="tab-pane" id="tab-draft">
+
+        <div class="page-section-header">
+          <div class="page-section-title">Draft Preview</div>
+          <div class="page-section-desc">Preview how your email will look with personalized variables.</div>
+        </div>
+
+        <div class="grid-12" style="align-items:start;">
+
+          <!-- Controls -->
+          <div class="card">
+            <div class="card-title mb-12">⚙️ Preview Options</div>
+
+            <div class="form-group">
+              <label class="form-label">Template</label>
+              <select id="draft-template" class="form-control" onchange="loadDraftPreview()"></select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Test Variables (JSON)</label>
+              <textarea id="draft-variables" class="form-control" rows="6" placeholder='{"Owner Name": "John", "Company Name": "Acme Corp"}'></textarea>
+            </div>
+
+            <button class="btn btn-primary btn-full" onclick="previewDraft()">
+              <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Render Preview
+            </button>
+          </div>
+
+          <!-- Email Preview -->
+          <div class="email-preview-shell">
+            <div class="email-preview-header">
+              <strong>From:</strong> Your Sender &nbsp;•&nbsp; <strong>To:</strong> Recipient &nbsp;•&nbsp; <strong>Via:</strong> NexMail
+            </div>
+            <div class="email-preview-subject" id="prev-subject-line">—</div>
+            <div class="email-preview-body" id="prev-body-box">
+              <span class="text-muted text-sm">Select a template and click Render Preview.</span>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /tab-draft -->
+
+
+      <!-- ════════════════════════════════════════════════ -->
+      <!--  TAB: LIVE MONITOR                               -->
+      <!-- ════════════════════════════════════════════════ -->
+      <div class="tab-pane" id="tab-monitor">
+
+        <div class="page-section-header">
+          <div class="page-section-title">Live Monitor</div>
+          <div class="page-section-desc">Real-time campaign progress and system activity log.</div>
+        </div>
+
+        <div class="grid-2" style="align-items:start;">
+
+          <!-- Active Campaigns -->
+          <div>
+            <div class="card mb-16">
+              <div class="card-header">
+                <div class="card-title">🚀 Active Campaigns</div>
+                <button class="btn btn-ghost btn-sm" onclick="fetchStatus()">↻ Refresh</button>
+              </div>
+              <div id="monitor-campaigns-list">
+                <div class="text-muted text-sm" style="text-align:center;padding:20px;">No active campaigns.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Activity Log -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">📋 Activity Log</div>
+              <span class="badge badge-running">Live</span>
+            </div>
+            <div class="log-box" id="monitor-logs">Connecting...</div>
+          </div>
+
+        </div>
+      </div><!-- /tab-monitor -->
+
+
+      <!-- ════════════════════════════════════════════════ -->
+      <!--  TAB: EMAIL TRACKING                             -->
+      <!-- ════════════════════════════════════════════════ -->
+      <div class="tab-pane" id="tab-tracking">
+
+        <div class="page-section-header">
+          <div class="page-section-title">Email Tracking &amp; Analytics</div>
+          <div class="page-section-desc">Monitor email opens, replies, and 48-hour follow-up alerts.</div>
+        </div>
+
+        <!-- Summary stat cards -->
+        <div class="kpi-grid mb-16" style="grid-template-columns:repeat(5,1fr);">
+          <div class="kpi-card" style="--kpi-color:#6366f1;--kpi-icon-bg:#eef2ff;padding:14px 16px;">
+            <div class="kpi-label" style="font-size:10px;">Total Sent</div>
+            <div class="kpi-value" style="font-size:22px;" id="tr-total">—</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color:#2563eb;--kpi-icon-bg:#eff6ff;padding:14px 16px;">
+            <div class="kpi-label" style="font-size:10px;">Opened</div>
+            <div class="kpi-value" style="font-size:22px;color:var(--info);" id="tr-opened">—</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color:#059669;--kpi-icon-bg:#ecfdf5;padding:14px 16px;">
+            <div class="kpi-label" style="font-size:10px;">Replied</div>
+            <div class="kpi-value" style="font-size:22px;color:var(--success);" id="tr-replied">—</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color:#dc2626;--kpi-icon-bg:#fef2f2;padding:14px 16px;">
+            <div class="kpi-label" style="font-size:10px;">48h Alert</div>
+            <div class="kpi-value" style="font-size:22px;color:var(--danger);" id="tr-48h">—</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color:#d97706;--kpi-icon-bg:#fffbeb;padding:14px 16px;">
+            <div class="kpi-label" style="font-size:10px;">Open Rate</div>
+            <div class="kpi-value" style="font-size:22px;color:var(--warn);" id="tr-open-rate">—%</div>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="card mb-16">
+          <div class="flex-row flex-between flex-wrap" style="gap:10px;">
+            <div class="flex-row flex-wrap gap-8">
+              <span style="font-size:12px;font-weight:600;color:var(--text-secondary);">Status:</span>
+              <button id="tr-btn-all"       class="btn btn-secondary btn-sm" onclick="loadTracking('all')">All</button>
+              <button id="tr-btn-opened"    class="btn btn-secondary btn-sm" onclick="loadTracking('opened')">Opened</button>
+              <button id="tr-btn-replied"   class="btn btn-secondary btn-sm" onclick="loadTracking('replied')">Replied</button>
+              <button id="tr-btn-not_opened"class="btn btn-secondary btn-sm" onclick="loadTracking('not_opened')">Not Opened</button>
+              <button id="tr-btn-alert_48h" class="btn btn-secondary btn-sm" onclick="loadTracking('alert_48h')">48h Alert</button>
+            </div>
+            <div class="flex-row flex-wrap gap-8">
+              <select id="track-campaign-filter" class="form-control" style="width: 180px;" onchange="applyFilters()">
+                <option value="">All Campaigns</option>
+              </select>
+              <input type="date" id="track-date-from" class="form-control text-sm">
+              <input type="date" id="track-date-to"   class="form-control text-sm">
+              <select id="tr-sender-filter" class="form-control" style="width:200px;"></select>
+              <button class="btn btn-secondary btn-sm" onclick="applyFilters()">🔍 Apply</button>
+              <button class="btn btn-ghost btn-sm" onclick="clearTrackingFilters()">✕ Clear</button>
+              <button id="btn-export-csv" class="btn btn-secondary btn-sm">⬇ Export CSV</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tracking table -->
+        <div class="card mb-16">
+          <div class="card-header">
+            <div class="card-title">📊 Email Log</div>
+            <button class="btn btn-ghost btn-sm" onclick="refreshTracking()">↻ Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Recipient</th>
+                  <th>Company / Owner</th>
+                  <th>Sender</th>
+                  <th>Sent At</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="tracking-table-body">
+                <tr><td colspan="6" style="text-align:center;padding:30px;" class="text-muted">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Per-sender breakdown -->
+        <div class="card mb-16">
+          <div class="card-header">
+            <div class="card-title">📬 Per-Sender Breakdown</div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Sender Account</th>
+                  <th style="text-align:center;">Total Sent</th>
+                  <th style="text-align:center;">Opened</th>
+                  <th style="text-align:center;">Replied</th>
+                  <th style="text-align:center;">48h Alert</th>
+                  <th style="text-align:center;">Open Rate</th>
+                </tr>
+              </thead>
+              <tbody id="per-sender-table-body">
+                <tr><td colspan="6" style="text-align:center;padding:20px;" class="text-muted">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Per-campaign breakdown -->
+        <div class="card mb-16">
+          <div class="card-header">
+            <div class="card-title">📈 Per-Campaign Effectiveness</div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Campaign (Subject)</th>
+                  <th style="text-align:center;">Total Sent</th>
+                  <th style="text-align:center;">Opened</th>
+                  <th style="text-align:center;">Replied</th>
+                  <th style="text-align:center;">48h Alert</th>
+                  <th style="text-align:center;">Open Rate</th>
+                </tr>
+              </thead>
+              <tbody id="per-campaign-table-body">
+                <tr><td colspan="6" style="text-align:center;padding:20px;" class="text-muted">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Replies Inbox -->
+        <div class="card mb-16">
+          <div class="card-header">
+            <div class="card-title">✉️ Replies Inbox</div>
+            <div class="flex-row gap-8">
+              <label class="check-label text-sm">
+                <input type="checkbox" id="show-bounces-chk" onchange="loadReplies()"> Show bounces
+              </label>
+              <button class="btn btn-ghost btn-sm" onclick="loadReplies()">↻ Refresh</button>
+            </div>
+          </div>
+          <div id="replies-inbox-container">
+            <div class="text-muted text-sm" style="text-align:center;padding:24px;">Loading replies…</div>
+          </div>
+        </div>
+
+        <!-- IMAP Setup -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🔑 Enable Reply Detection — IMAP Password</div>
+          </div>
+          <div class="warn-box">
+            ⚠️ <strong>IMAP password required</strong> for admin@, cayagya@, bl@, invest@mybankloan.ai to detect replies.
+            Enter the same password you use at <strong>mail.mybankloan.ai</strong> webmail.
+          </div>
+          <div class="grid-2" style="align-items:end;gap:12px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">Sender Account</label>
+              <select id="imap-pwd-email" class="form-control">
+                <option value="admin@mybankloan.ai">admin@mybankloan.ai</option>
+                <option value="cayagya@mybankloan.ai">cayagya@mybankloan.ai</option>
+                <option value="bl@mybankloan.ai">bl@mybankloan.ai</option>
+                <option value="invest@mybankloan.ai">invest@mybankloan.ai</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">Webmail / IMAP Password</label>
+              <input type="password" id="imap-pwd-value" class="form-control" placeholder="Your webmail password">
+            </div>
+          </div>
+          <div class="mt-12">
+            <button class="btn btn-primary btn-sm" onclick="saveImapPassword()">💾 Save IMAP Password</button>
+          </div>
+          <div id="imap-pwd-status" style="margin-top:8px;font-size:12px;"></div>
+        </div>
+
+      </div><!-- /tab-tracking -->
+
+
+      <!-- ════════════════════════════════════════════════ -->
+      <!--  TAB: SETTINGS                                   -->
+      <!-- ════════════════════════════════════════════════ -->
+      <div class="tab-pane" id="tab-settings">
+
+        <div class="page-section-header">
+          <div class="page-section-title">Settings &amp; Configuration</div>
+          <div class="page-section-desc">Manage sender accounts, template mappings and global preferences.</div>
+        </div>
+
+        <div class="grid-settings" style="align-items:start;">
+
+          <!-- LEFT: Sender Accounts -->
+          <div>
+            <!-- Sender list -->
+            <div class="card mb-16">
+              <div class="card-header">
+                <div class="card-title">📧 Sender Accounts</div>
+              </div>
+              <div id="settings-senders-list" style="max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+                <div class="text-muted text-sm">Loading…</div>
+              </div>
+            </div>
+
+            <!-- Add / Edit sender form -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title" id="sender-form-title">Add Sender Account</div>
+                <button class="btn btn-ghost btn-sm" id="btn-cancel-edit" style="display:none;" onclick="resetSenderForm()">✕ Cancel Edit</button>
+              </div>
+              <input type="hidden" id="snd-is-edit" value="false">
+
+              <div class="grid-2">
+                <div class="form-group">
+                  <label class="form-label">Email Address *</label>
+                  <input type="email" id="snd-email" class="form-control" placeholder="sender@domain.com">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Display Name *</label>
+                  <input type="text" id="snd-display-name" class="form-control" placeholder="Company Name">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Email Provider</label>
+                <select id="snd-provider" class="form-control" onchange="toggleProviderSettings()">
+                  <option value="brevo">Brevo (Transactional API)</option>
+                  <option value="smtp">SMTP / Gmail / Custom</option>
+                </select>
+              </div>
+
+              <div id="snd-brevo-block">
+                <div class="form-group">
+                  <label class="form-label">Brevo API Key</label>
+                  <input type="password" id="snd-api-key" class="form-control" placeholder="xkeysib-…">
+                </div>
+              </div>
+
+              <div id="snd-smtp-block" style="display:none;">
+                <div class="grid-2">
+                  <div class="form-group">
+                    <label class="form-label">SMTP Host</label>
+                    <input type="text" id="snd-smtp-host" class="form-control" placeholder="smtp.gmail.com">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">SMTP Port</label>
+                    <input type="number" id="snd-smtp-port" class="form-control" placeholder="587">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">SMTP Password / App Password</label>
+                  <input type="password" id="snd-smtp-pass" class="form-control" placeholder="Leave blank to keep existing">
+                </div>
+                <div class="grid-2">
+                  <div class="form-group">
+                    <label class="form-label">IMAP Host</label>
+                    <input type="text" id="snd-imap-host" class="form-control" placeholder="imap.gmail.com">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">IMAP Port</label>
+                    <input type="number" id="snd-imap-port" class="form-control" placeholder="993">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">IMAP Password</label>
+                  <input type="password" id="snd-imap-pass" class="form-control" placeholder="Leave blank to keep existing">
+                </div>
+              </div>
+
+              <div class="grid-3">
+                <div class="form-group">
+                  <label class="form-label">Daily Limit</label>
+                  <input type="number" id="snd-limit" class="form-control" value="1500">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Delay Min (s)</label>
+                  <input type="number" id="snd-delay-min" class="form-control" value="60">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Delay Max (s)</label>
+                  <input type="number" id="snd-delay-max" class="form-control" value="120">
+                </div>
+              </div>
+
+              <div class="flex-row mb-12">
+                <label class="check-label" style="margin-right:16px;">
+                  <input type="checkbox" id="snd-active" checked> Active
+                </label>
+                <label class="check-label">
+                  <input type="checkbox" id="snd-skip-test"> Skip Connection Test
+                </label>
+              </div>
+
+              <div class="flex-row" style="justify-content:flex-end;">
+                <button class="btn btn-primary" onclick="saveSenderAccount()">
+                  <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  Save Account
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: Mappings & Global Settings -->
+          <div>
+            <!-- Template-Sender Mapping -->
+            <div class="card mb-16">
+              <div class="card-header">
+                <div class="card-title">🔗 Template → Sender Mapping</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Sender Account</label>
+                <select id="map-sender-select" class="form-control" onchange="loadSenderTemplateMappings()"></select>
+              </div>
+              <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Assigned Templates</div>
+              <div id="map-templates-checklist" class="mapping-grid">
+                <div class="text-muted text-sm">Select a sender above.</div>
+              </div>
+            </div>
+
+            <!-- Global Settings -->
+            <div class="card mb-16">
+              <div class="card-header">
+                <div class="card-title">⚙️ Global Settings</div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Global Reply/Receiver ID</label>
+                <div class="text-xs text-muted mb-4">Fallback email address where replies and bounces are routed.</div>
+                <input type="text" id="global-receiver-id" class="form-control" placeholder="admin@mybankloan.ai">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Tracking Base URL</label>
+                <input type="text" id="setting-tracking-url" class="form-control" placeholder="https://your-public-domain.com">
+                <div id="tracking-url-warning" class="warn-box mt-8" style="display:none;margin-bottom:0;">
+                  ⚠️ Tracking URL looks like localhost. Set a public HTTPS URL for email open tracking to work.
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Dashboard Password</label>
+                <input type="password" id="setting-password" class="form-control" placeholder="New password">
+              </div>
+
+              <div class="flex-row" style="justify-content:flex-end;">
+                <button class="btn btn-primary" onclick="saveGlobalSettings()">
+                  <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  Save Settings
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /tab-settings -->
+
+    </div><!-- /page-body -->
+  </div><!-- /main-content -->
+</div><!-- /app-shell -->
+
+<script>
         // Set client local time clock
         function updateClock() {
             var n = new Date().toLocaleString('en-IN', {
@@ -1374,19 +1702,25 @@
         function getPwd() {
             const urlParams = new URLSearchParams(window.location.search);
             let pwd = urlParams.get('pwd') || localStorage.getItem("mailer_password");
-            if (!pwd) pwd = 'admin@123'; // Default fallback
+            if (!pwd) pwd = 'admin@123';
             return pwd;
         }
 
-        // Tab Switcher
+        // ── TAB SWITCHER ──────────────────────────────────
         function switchTab(tabName, btnEl) {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            const pane = document.getElementById('tab-' + tabName);
+            if (pane) pane.classList.add('active');
             
-            document.getElementById('tab-' + tabName).classList.add('active');
-            btnEl.classList.add('active');
+            if (btnEl) {
+                document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                btnEl.classList.add('active');
+                document.getElementById('current-page-title').textContent = btnEl.textContent.trim();
+            }
 
-            if (tabName === 'templates') {
+            if (tabName === 'dashboard') {
+                loadDashboardData();
+            } else if (tabName === 'templates') {
                 loadTemplates();
             } else if (tabName === 'draft') {
                 loadDraftSelect();
@@ -1394,13 +1728,111 @@
                 loadTracking('all');
                 loadReplies();
                 loadGlobalSettings();
-
+                populateCampaignDropdown();
             } else if (tabName === 'settings') {
                 loadSettingsData();
+                loadGlobalSettings();
             }
         }
+        
+        function toggleSidebar() {
+            document.querySelector('.sidebar').classList.toggle('collapsed');
+        }
 
-        // ── LAUNCH CAMPAIGN & INITIAL DATA LOADING ────────────────────────────────
+        // ── DASHBOARD KPIs ────────────────────────────────
+        async function loadDashboardData() {
+            renderActivityChart();
+            try {
+                const r = await fetch('/api/tracking-summary');
+                const data = await r.json();
+                const total = data.total_sent || 0;
+                const opened = data.total_opened || 0;
+                const replied = data.total_replied || 0;
+                const bounced = data.total_bounced || 0;
+                const openRate = total > 0 ? ((opened / total) * 100).toFixed(1) : '0.0';
+                const replyRate = total > 0 ? ((replied / total) * 100).toFixed(1) : '0.0';
+                const bounceRate = total > 0 ? ((bounced / total) * 100).toFixed(1) : '0.0';
+                const el = (id) => document.getElementById(id);
+                if (el('kpi-open-rate')) el('kpi-open-rate').textContent = openRate + '%';
+                if (el('kpi-reply-rate')) el('kpi-reply-rate').textContent = replyRate + '%';
+                if (el('kpi-total-sent')) el('kpi-total-sent').textContent = total.toLocaleString();
+                if (el('kpi-bounce-rate')) el('kpi-bounce-rate').textContent = bounceRate + '%';
+                const score = Math.min(100, Math.round(50 + (parseFloat(openRate) * 2)));
+                if (el('delivery-score-val')) el('delivery-score-val').textContent = score;
+                if (el('score-arc')) el('score-arc').setAttribute('stroke-dasharray', score + ' 100');
+            } catch(e) { console.log('Dashboard KPI load:', e); }
+
+            try {
+                const sr = await fetch('/api/senders');
+                const senders = await sr.json();
+                const qList = document.getElementById('sender-quota-list');
+                if (qList && senders.length) {
+                    qList.innerHTML = senders.slice(0,5).map(s => {
+                        const sent = s.sent_today || 0;
+                        const limit = 300;
+                        const pct = Math.min(100, Math.round((sent / limit) * 100));
+                        const color = pct >= 100 ? '#dc2626' : pct >= 75 ? '#d97706' : '#059669';
+                        return `<div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                <span style="font-size:12px;font-weight:600;color:#334155;">${s.email.split('@')[0]}</span>
+                                <span style="font-size:12px;color:${color};font-weight:700;">${sent}/${limit}</span>
+                            </div>
+                            <div class="prog-track">
+                                <div style="background:${color};height:100%;width:${pct}%;border-radius:99px;transition:width 0.5s;"></div>
+                            </div>
+                        </div>`;
+                    }).join('');
+                } else if (qList) {
+                    qList.innerHTML = '<div class="text-muted text-sm">No senders configured</div>';
+                }
+            } catch(e) { console.log('Sender quota:', e); }
+
+            try {
+                const cr = await fetch('/api/campaign-history');
+                const camps = await cr.json();
+                const cList = document.getElementById('recent-campaigns-list');
+                if (cList && camps.length) {
+                    cList.innerHTML = camps.slice(0,5).map(c => `
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);">
+                            <div>
+                                <div style="font-size:12px;font-weight:600;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;" title="${c.template || ''}">${c.template || 'Campaign'}</div>
+                                <div style="font-size:10px;color:#94a3b8;">${c.counter_date || c.date || ''}</div>
+                            </div>
+                            <div style="font-size:13px;font-weight:700;color:#6366f1;">${c.total_rows || '—'}</div>
+                        </div>`).join('');
+                } else if (cList) {
+                    cList.innerHTML = '<div class="text-muted text-sm" style="padding:8px 0;">No campaigns yet</div>';
+                }
+            } catch(e) { console.log('Campaign history:', e); }
+
+            try {
+                const tr = await fetch('/tracking-stats?filter=all&limit=1000');
+                const tdata = await tr.json();
+                const rows = tdata.emails || [];
+                const tmap = {};
+                rows.forEach(r => {
+                    const k = r.subject || 'Unknown';
+                    if (!tmap[k]) tmap[k] = { sent: 0, opened: 0 };
+                    tmap[k].sent++;
+                    if (r.opened) tmap[k].opened++;
+                });
+                const sorted = Object.entries(tmap).sort((a,b) => (b[1].opened/Math.max(1,b[1].sent)) - (a[1].opened/Math.max(1,a[1].sent))).slice(0,5);
+                const ttList = document.getElementById('top-templates-list');
+                if (ttList && sorted.length) {
+                    ttList.innerHTML = sorted.map(([name, d]) => {
+                        const rate = d.sent > 0 ? ((d.opened/d.sent)*100).toFixed(0) : 0;
+                        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);">
+                            <span style="font-size:12px;color:#334155;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;" title="${name}">${name}</span>
+                            <span style="font-size:12px;font-weight:700;color:#059669;">${rate}%</span>
+                        </div>`;
+                    }).join('');
+                } else if (ttList) {
+                    ttList.innerHTML = '<div class="text-muted text-sm">No data yet</div>';
+                }
+            } catch(e) { console.log('Top templates:', e); }
+        }
+
+        // ── LAUNCH CAMPAIGN & INITIAL DATA ────────────────
         async function initData() {
             await loadSenders();
             filterTemplatesBySender();
@@ -1412,7 +1844,6 @@
                 const response = await fetch('/api/senders');
                 sendersList = await response.json();
                 
-                // Populate selects
                 const launchSel = document.getElementById('launch-sender');
                 const assocSel = document.getElementById('tmpl-sender-assoc');
                 const mapSel = document.getElementById('map-sender-select');
@@ -1428,13 +1859,11 @@
                     trSenderFilter.innerHTML = `<option value="">All Senders</option>` + opts;
                 }
                 
-                // Warn about Gmail
                 checkGmailWarning();
             } catch (err) {
                 console.error("Error loading senders:", err);
             }
         }
-
 
         function checkGmailWarning() {
             const email = document.getElementById('launch-sender').value;
@@ -1463,7 +1892,7 @@
             }
         }
 
-        // ── LIVE MONITORING & LOGS POLLER ──────────────────────────────────────────
+        // ── LIVE MONITORING ───────────────────────────────
         let pollInterval = null;
         function startPolling() {
             if (pollInterval) clearInterval(pollInterval);
@@ -1476,13 +1905,12 @@
                 const response = await fetch('/status');
                 const data = await response.json();
                 
-                // Update header stats
                 document.getElementById('stat-sent').textContent = data.sent_today;
                 document.getElementById('stat-rem').textContent = Math.max(0, 1500 - data.sent_today);
                 const pct = Math.min(100, Math.round((data.sent_today / 1500) * 100));
-                document.getElementById('stat-prog').style.width = pct + '%';
+                const progEl = document.getElementById('stat-prog');
+                if (progEl) progEl.style.width = pct + '%';
                 
-                // Update active campaigns list in monitor
                 const campaignsList = document.getElementById('monitor-campaigns-list');
                 const senders = data.senders || {};
                 
@@ -1506,14 +1934,14 @@
                         
                         let cancelBtn = '';
                         if (st.running || st.paused) {
-                            cancelBtn = `<button class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size:11px; margin-left: 10px; border-radius: 4px; display: inline-flex;" onclick="cancelCampaign('${st.campaign_id}')">Cancel</button>`;
+                            cancelBtn = `<button class="btn btn-danger btn-sm" onclick="cancelCampaign('${st.campaign_id}')">Cancel</button>`;
                         }
                         
                         html += `
                         <div class="monitor-sender-card">
                             <div class="monitor-sender-header">
                                 <span class="monitor-sender-title">${email} (${st.category || 'No Category'})</span>
-                                <div style="display:flex; align-items:center;">
+                                <div style="display:flex;align-items:center;gap:8px;">
                                     ${badge}
                                     ${cancelBtn}
                                 </div>
@@ -1522,15 +1950,15 @@
                                 <div class="prog-fill" style="width: ${progPct}%"></div>
                             </div>
                             <div class="monitor-sender-meta">
-                                ${st.current_row} of ${st.total_rows} sent (${progPct}%) • Started: ${st.started_at || ''}
+                                ${st.current_row} of ${st.total_rows} sent (${progPct}%) &bull; Started: ${st.started_at || ''}
+                                ${st.remaining_emails > 0 ? `<br><span style="color:var(--text-muted)">Remaining: ${st.remaining_emails} emails (~${st.estimated_time_mins} mins)</span>` : ''}
                             </div>
                         </div>`;
                     });
                 }
                 
-                campaignsList.innerHTML = html || `<div style="color:var(--muted); font-size:13px;">No active campaigns.</div>`;
+                campaignsList.innerHTML = html || `<div class="text-muted text-sm" style="text-align:center;padding:20px;">No active campaigns.</div>`;
                 
-                // System Status Badge
                 const statusBadgeContainer = document.getElementById('stat-status');
                 if (anyRunning) {
                     statusBadgeContainer.innerHTML = '<span class="badge badge-running">Running</span>';
@@ -1540,7 +1968,6 @@
                     statusBadgeContainer.innerHTML = '<span class="badge badge-idle">Idle</span>';
                 }
                 
-                // Logs
                 const logsBox = document.getElementById('monitor-logs');
                 if (logsBox) {
                     const logsHtml = data.log.map(line => {
@@ -1553,13 +1980,11 @@
                     logsBox.scrollTop = logsBox.scrollHeight;
                 }
                 
-                // Fetch scheduled triggers list in monitor
                 loadScheduledCampaigns();
             } catch (err) {
                 console.error("Poller error:", err);
             }
         }
-
 
         async function cancelCampaign(campaignId) {
             if (!confirm("Are you sure you want to cancel this campaign?")) return;
@@ -1581,7 +2006,7 @@
             }
         }
 
-        // ── TEMPLATE MANAGEMENT & ANALYZER ─────────────────────────────────────────
+        // ── TEMPLATE MANAGEMENT ───────────────────────────
         async function loadTemplates() {
             try {
                 const response = await fetch('/templates-list-full');
@@ -1589,14 +2014,12 @@
                 
                 const container = document.getElementById('templates-list-container');
                 container.innerHTML = templatesList.map(t => `
-                    <div class="sender-item-card" style="cursor:pointer;" onclick="editTemplate('${t.category}')">
-                        <div class="sender-item-title">${t.category}</div>
-                        <div class="sender-item-subtitle" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width:240px;">Subject: ${t.subject}</div>
-                        <div class="sender-item-meta">
-                            <span>Senders: ${t.senders || 'All Senders'}</span>
-                        </div>
+                    <div class="template-card" onclick="editTemplate('${t.category}')">
+                        <div class="template-card-name">${t.category}</div>
+                        <div class="template-card-subj">Subject: ${t.subject}</div>
+                        <div class="template-card-meta">Senders: ${t.senders || 'All Senders'}</div>
                     </div>
-                `).join('') || `<div style="color:var(--muted); font-size:13px; grid-column: 1/-1; text-align:center;">No templates configured. Create one above!</div>`;
+                `).join('') || `<div class="text-muted text-sm" style="text-align:center;padding:20px;">No templates configured. Create one!</div>`;
             } catch (err) {
                 console.error("Error loading templates:", err);
             }
@@ -1607,14 +2030,13 @@
             if (!tmpl) return;
             
             document.getElementById('tmpl-cat').value = tmpl.category;
-            document.getElementById('tmpl-cat').readOnly = true; // Cannot rename category to prevent conflicts
+            document.getElementById('tmpl-cat').readOnly = true;
             document.getElementById('tmpl-subject').value = tmpl.subject;
             document.getElementById('tmpl-body').value = tmpl.body_text;
             
             document.getElementById('tmpl-details-section').style.display = 'block';
             document.getElementById('btn-tmpl-delete').style.display = 'block';
             
-            // Trigger analysis
             analyzeTemplateContent(tmpl.subject, tmpl.body_text);
         }
 
@@ -1628,14 +2050,13 @@
             }
         }
 
-        // Real-time deliverability suggestions poller (debounce inputs)
         function queueAnalysis() {
             if (analysisTimeout) clearTimeout(analysisTimeout);
             analysisTimeout = setTimeout(() => {
                 const subj = document.getElementById('tmpl-subject').value;
                 const body = document.getElementById('tmpl-body').value;
                 analyzeTemplateContent(subj, body);
-            }, 500); // 500ms debounce
+            }, 500);
         }
 
         async function analyzeTemplateContent(subject, body_text) {
@@ -1650,7 +2071,6 @@
                 
                 const data = await response.json();
                 
-                // Update score ring & class
                 const ring = document.getElementById('opt-score-ring');
                 const text = document.getElementById('opt-score-txt');
                 const classTxt = document.getElementById('opt-class-txt');
@@ -1659,23 +2079,18 @@
                 classTxt.textContent = data.classification;
                 classTxt.className = 'opt-classification-value ' + data.classification.toLowerCase();
                 
-                // Conic gradient color mapping
-                let ringColor = 'var(--accent)';
-                if (data.score < 55) {
-                    ringColor = 'var(--danger)';
-                } else if (data.score < 85) {
-                    ringColor = 'var(--warn)';
-                }
+                let ringColor = '#6366f1';
+                if (data.score < 55) ringColor = '#dc2626';
+                else if (data.score < 85) ringColor = '#d97706';
                 
                 const angle = (data.score / 100) * 360;
-                ring.style.background = `conic-gradient(${ringColor} ${angle}deg, rgba(255, 255, 255, 0.05) ${angle}deg)`;
+                ring.style.background = `conic-gradient(${ringColor} ${angle}deg, #f1f5f9 ${angle}deg)`;
                 
-                // Suggestions
                 const list = document.getElementById('opt-suggestions');
                 if (data.suggestions.length === 0) {
                     list.innerHTML = `
-                    <div style="background:var(--success-bg); color:var(--success); border:1px solid rgba(16,185,129,0.15); border-radius:var(--r); padding:14px; text-align:center;">
-                        ✓ Clean deliverability score! This email has high chance of landing in the <b>Primary Inbox</b>.
+                    <div class="success-box" style="text-align:center;">
+                        ✓ Clean deliverability score! High chance of landing in the <b>Primary Inbox</b>.
                     </div>`;
                 } else {
                     list.innerHTML = data.suggestions.map(s => `
@@ -1724,10 +2139,7 @@
         async function deleteTemplate() {
             const cat = document.getElementById('tmpl-cat').value.trim();
             if (!cat) return;
-            
-            if (!confirm(`Are you sure you want to delete template "${cat}"?`)) {
-                return;
-            }
+            if (!confirm(`Are you sure you want to delete template "${cat}"?`)) return;
             
             try {
                 const response = await fetch('/delete-template', {
@@ -1754,18 +2166,16 @@
             document.getElementById('tmpl-cat').readOnly = false;
             document.getElementById('tmpl-subject').value = '';
             document.getElementById('tmpl-body').value = '';
-            
             document.getElementById('tmpl-details-section').style.display = 'none';
             document.getElementById('btn-tmpl-delete').style.display = 'none';
-            
-            document.getElementById('opt-score-ring').style.background = `conic-gradient(rgba(255, 255, 255, 0.05) 0deg, rgba(255, 255, 255, 0.05) 0deg)`;
+            document.getElementById('opt-score-ring').style.background = 'conic-gradient(#f1f5f9 0deg, #f1f5f9 0deg)';
             document.getElementById('opt-score-txt').textContent = '—';
             document.getElementById('opt-class-txt').textContent = '—';
             document.getElementById('opt-class-txt').className = 'opt-classification-value';
-            document.getElementById('opt-suggestions').innerHTML = `<div style="color:var(--muted); font-size:13px; text-align:center; padding:20px;">Start entering subject & body to view suggestions.</div>`;
+            document.getElementById('opt-suggestions').innerHTML = `<div class="text-muted text-sm" style="text-align:center;padding:12px 0;">Enter subject & body to see suggestions.</div>`;
         }
 
-        // ── TAB 3: DRAFT PREVIEW ───────────────────────────────────────────
+        // ── DRAFT PREVIEW ─────────────────────────────────
         function loadDraftSelect() {
             const select = document.getElementById('draft-template');
             select.innerHTML = templatesList.map(t => `<option value="${t.category}">${t.category}</option>`).join('');
@@ -1796,9 +2206,7 @@
             let vars = {};
             try {
                 vars = JSON.parse(document.getElementById('draft-variables').value || '{}');
-            } catch (e) {
-                // Invalid JSON, ignore and use un-personalized template
-            }
+            } catch (e) {}
             
             try {
                 const response = await fetch('/preview-template', {
@@ -1810,7 +2218,6 @@
                 const data = await response.json();
                 document.getElementById('prev-subject-line').textContent = data.subject || '—';
                 
-                // Formats newlines as HTML paragraphs safely
                 let text = data.body || '';
                 let formatted = text.split('\n').map(line => {
                     let s = line.trim();
@@ -1825,36 +2232,41 @@
             }
         }
 
-        // ── TAB 5: EMAIL TRACKING ──────────────────────────────────────────
+        // ── EMAIL TRACKING ────────────────────────────────
+        function applyFilters() {
+            loadTracking(currentFilter);
+        }
+
         async function loadTracking(filter) {
             currentFilter = filter;
             
-            // Highlight active status button
             ['all','opened','replied','not_opened','alert_48h'].forEach(f => {
                 const btn = document.getElementById('tr-btn-' + f);
                 if (btn) {
-                    btn.style.background = (f === filter) ? 'var(--accent)' : '';
+                    btn.style.background = (f === filter) ? 'var(--brand)' : '';
                     btn.style.color = (f === filter) ? '#fff' : '';
+                    btn.style.borderColor = (f === filter) ? 'var(--brand)' : '';
                 }
             });
 
             const container = document.getElementById('tracking-table-body');
-            container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--muted);">Loading tracking data...</td></tr>`;
+            container.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;" class="text-muted">Loading tracking data...</td></tr>`;
             
             try {
-                const dateFrom = document.getElementById('tr-date-from')?.value || '';
-                const dateTo   = document.getElementById('tr-date-to')?.value   || '';
+                const dateFrom = document.getElementById('track-date-from')?.value || '';
+                const dateTo   = document.getElementById('track-date-to')?.value   || '';
                 const sender   = document.getElementById('tr-sender-filter')?.value || '';
+                const cmp      = document.getElementById('track-campaign-filter')?.value || '';
 
                 const url = `/tracking-stats?filter=${filter}&limit=500` +
                     (dateFrom ? `&date_from=${dateFrom}` : '') +
                     (dateTo   ? `&date_to=${dateTo}`     : '') +
-                    (sender   ? `&sender=${encodeURIComponent(sender)}` : '');
+                    (sender   ? `&sender=${encodeURIComponent(sender)}` : '') +
+                    (cmp      ? `&campaign_name=${encodeURIComponent(cmp)}` : '');
 
                 const response = await fetch(url);
                 const data = await response.json();
                 
-                // Update count cards
                 const sum = data.summary || {};
                 const total  = sum.total  || 0;
                 const opened = sum.opened || 0;
@@ -1865,11 +2277,20 @@
                 const openRate = total > 0 ? Math.round((opened / total) * 100) : 0;
                 document.getElementById('tr-open-rate').textContent = openRate + '%';
                 
-                // Load per-sender breakdown (with same date filters)
-                loadPerSenderBreakdown(dateFrom, dateTo);
+                const btn = document.getElementById('btn-export-csv');
+                if (btn) {
+                    let dlUrl = `/tracking-download?filter=${filter}`;
+                    if (dateFrom) dlUrl += `&date_from=${dateFrom}`;
+                    if (dateTo)   dlUrl += `&date_to=${dateTo}`;
+                    if (cmp)      dlUrl += `&campaign_name=${encodeURIComponent(cmp)}`;
+                    btn.onclick = () => window.location.href = dlUrl;
+                }
+                
+                loadPerSenderBreakdown(dateFrom, dateTo, cmp);
+                loadPerCampaignBreakdown(dateFrom, dateTo);
                 
                 if (!data.emails || data.emails.length === 0) {
-                    container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--muted);">No matching tracking data found.</td></tr>`;
+                    container.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;" class="text-muted">No matching tracking data found.</td></tr>`;
                     return;
                 }
                 
@@ -1886,7 +2307,7 @@
                     }
                     
                     const actionBtn = !e.replied ? 
-                        `<button class="btn btn-secondary btn-sm" onclick="markAsReplied(${e.id})">Mark Replied</button>` : 
+                        `<button class="btn btn-secondary btn-xs" onclick="markAsReplied(${e.id})">Mark Replied</button>` : 
                         `—`;
                         
                     let sentTime = e.sent_at ? e.sent_at.split('.')[0] : '—';
@@ -1894,9 +2315,9 @@
                     let htmlRow = `
                     <tr>
                         <td style="font-weight:600;">${e.to_email}</td>
-                        <td style="color:var(--muted);">${e.company_name || '—'} <div style="font-size:10px; color:var(--hint);">${e.owner_name || ''}</div></td>
-                        <td style="color:var(--hint); font-size:12px;">${e.sender_email}</td>
-                        <td style="color:var(--muted); font-size:12px;">${sentTime}</td>
+                        <td class="text-muted">${e.company_name || '—'} <div style="font-size:10px;color:var(--text-hint);">${e.owner_name || ''}</div></td>
+                        <td style="font-size:12px;" class="text-muted">${e.sender_email}</td>
+                        <td style="font-size:12px;" class="text-muted">${sentTime}</td>
                         <td style="text-align:center;">${statusBadge}</td>
                         <td style="text-align:center;">${actionBtn}</td>
                     </tr>`;
@@ -1915,37 +2336,39 @@
                     return htmlRow;
                 }).join('');
             } catch (err) {
-                container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--danger);">Error loading tracking data: ${err}</td></tr>`;
+                container.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;" class="text-danger">Error loading tracking data: ${err}</td></tr>`;
             }
         }
 
         async function loadPerSenderBreakdown(dateFrom, dateTo) {
             const tbody = document.getElementById('per-sender-table-body');
+            const cmp = document.getElementById('track-campaign-filter').value;
             try {
                 let url = '/tracking-per-sender';
                 const params = [];
                 if (dateFrom) params.push('date_from=' + dateFrom);
                 if (dateTo)   params.push('date_to='   + dateTo);
+                if (cmp)      params.push('campaign_name=' + encodeURIComponent(cmp));
                 if (params.length) url += '?' + params.join('&');
                 
                 const resp = await fetch(url);
                 const rows = await resp.json();
                 
                 if (!rows || rows.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:14px;color:var(--muted);">No data.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:14px;" class="text-muted">No data.</td></tr>`;
                     return;
                 }
                 
                 tbody.innerHTML = rows.map(r => {
                     const rate = r.total > 0 ? Math.round((r.opened / r.total) * 100) : 0;
-                    const rateColor = rate >= 30 ? 'var(--accent)' : rate >= 15 ? '#ca8a04' : 'var(--danger)';
+                    const rateColor = rate >= 30 ? 'var(--success)' : rate >= 15 ? 'var(--warn)' : 'var(--danger)';
                     return `<tr>
                         <td style="font-weight:600;">${r.sender_email}</td>
-                        <td style="text-align:center; font-weight:700;">${r.total}</td>
-                        <td style="text-align:center; color:#2563eb; font-weight:600;">${r.opened}</td>
-                        <td style="text-align:center; color:var(--accent); font-weight:600;">${r.replied}</td>
-                        <td style="text-align:center; color:var(--danger);">${r.not_opened_48h}</td>
-                        <td style="text-align:center; font-weight:700; color:${rateColor};">${rate}%</td>
+                        <td style="text-align:center;font-weight:700;">${r.total}</td>
+                        <td style="text-align:center;color:var(--info);font-weight:600;">${r.opened}</td>
+                        <td style="text-align:center;color:var(--success);font-weight:600;">${r.replied}</td>
+                        <td style="text-align:center;color:var(--danger);">${r.not_opened_48h}</td>
+                        <td style="text-align:center;font-weight:700;color:${rateColor};">${rate}%</td>
                     </tr>`;
                 }).join('');
             } catch (e) {
@@ -1974,25 +2397,66 @@
             window.location.href = url;
         }
 
+        async function loadPerCampaignBreakdown(dateFrom, dateTo) {
+            const tbody = document.getElementById('per-campaign-table-body');
+            try {
+                let url = '/tracking-per-campaign';
+                const params = [];
+                if (dateFrom) params.push('date_from=' + dateFrom);
+                if (dateTo)   params.push('date_to='   + dateTo);
+                if (params.length) url += '?' + params.join('&');
+                
+                const resp = await fetch(url);
+                const rows = await resp.json();
+                
+                if (!rows || rows.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:14px;" class="text-muted">No data.</td></tr>`;
+                    return;
+                }
+                
+                tbody.innerHTML = rows.map(r => {
+                    const rate = r.total > 0 ? Math.round((r.opened / r.total) * 100) : 0;
+                    return `
+                    <tr>
+                        <td style="font-weight:500;">
+                            <div style="font-size:13px; color:var(--text);">${r.campaign_name || '(Legacy Campaign)'}</div>
+                            <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Sub: ${r.subject || '(No Subject)'}</div>
+                        </td>
+                        <td style="text-align:center;">${r.total}</td>
+                        <td style="text-align:center;">${r.opened}</td>
+                        <td style="text-align:center;">${r.replied}</td>
+                        <td style="text-align:center;color:#ef4444;">${r.not_opened_48h}</td>
+                        <td style="text-align:center;">
+                            <span class="badge ${rate > 20 ? 'badge-success' : 'badge-danger'}">${rate}%</span>
+                        </td>
+                    </tr>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.error(e);
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:14px;color:red;">Error loading campaign stats.</td></tr>`;
+            }
+        }
+
         async function loadReplies() {
             const container = document.getElementById('replies-inbox-container');
             if (!container) return;
             const includeBounces = document.getElementById('show-bounces-chk')?.checked ? 'true' : 'false';
-            container.innerHTML = `<div style="text-align:center;color:var(--muted);padding:24px;font-size:13px;">Loading replies...</div>`;
+            container.innerHTML = `<div class="text-muted text-sm" style="text-align:center;padding:24px;">Loading replies...</div>`;
             try {
                 const resp = await fetch(`/replies-list?limit=200&include_bounces=${includeBounces}`);
                 const data = await resp.json();
                 const replies = data.replies || [];
                 if (replies.length === 0) {
-                    container.innerHTML = `<div style="text-align:center;color:var(--muted);padding:30px;font-size:13px;">
+                    container.innerHTML = `<div class="text-muted text-sm" style="text-align:center;padding:24px;">
                         No real replies found yet.<br>
-                        <span style="font-size:12px;opacity:.7;">Reply detection runs every 60 seconds. Make sure IMAP passwords are saved below.</span>
+                        <span style="font-size:11px;opacity:.7;">Reply detection runs every 60 seconds. Make sure IMAP passwords are saved below.</span>
                     </div>`;
                     return;
                 }
                 container.innerHTML = `
                 <div style="overflow-x:auto;">
-                <table class="track-table" style="font-size:13px;">
+                <table class="data-table">
                     <thead><tr>
                         <th>From</th>
                         <th>Subject</th>
@@ -2004,19 +2468,19 @@
                     <tbody>
                     ${replies.map(r => `
                         <tr>
-                            <td style="font-weight:600;color:var(--accent);">${r.from_email}</td>
+                            <td style="font-weight:600;color:var(--brand);">${r.from_email}</td>
                             <td>${r.subject || '—'}</td>
-                            <td style="font-size:12px;color:var(--muted);">${r.to_email || r.company_name || '—'}</td>
-                            <td style="font-size:12px;color:var(--hint);">${r.sender_email || '—'}</td>
-                            <td style="font-size:12px;color:var(--muted);">${(r.received_at||'').split('.')[0]}</td>
-                            <td style="font-size:12px;color:var(--muted);max-width:280px;word-break:break-word;">${(r.body_preview||'').substring(0,180)}${r.body_preview && r.body_preview.length>180 ? '...' : ''}</td>
+                            <td class="text-muted text-sm">${r.to_email || r.company_name || '—'}</td>
+                            <td style="font-size:12px;" class="text-muted">${r.sender_email || '—'}</td>
+                            <td style="font-size:12px;" class="text-muted">${(r.received_at||'').split('.')[0]}</td>
+                            <td style="font-size:12px;max-width:280px;word-break:break-word;" class="text-muted">${(r.body_preview||'').substring(0,180)}${r.body_preview && r.body_preview.length>180 ? '...' : ''}</td>
                         </tr>
                     `).join('')}
                     </tbody>
                 </table>
                 </div>`;
             } catch (err) {
-                container.innerHTML = `<div style="color:var(--danger);padding:16px;font-size:13px;">Error loading replies: ${err}</div>`;
+                container.innerHTML = `<div class="text-danger text-sm" style="padding:16px;">Error loading replies: ${err}</div>`;
             }
         }
 
@@ -2025,7 +2489,7 @@
             const password = document.getElementById('imap-pwd-value').value.trim();
             const status = document.getElementById('imap-pwd-status');
             if (!password) { status.textContent = 'Please enter a password.'; status.style.color = 'var(--danger)'; return; }
-            status.textContent = 'Saving...'; status.style.color = 'var(--muted)';
+            status.textContent = 'Saving...'; status.style.color = 'var(--text-muted)';
             try {
                 const resp = await fetch('/api/update-imap-password', {
                     method: 'POST',
@@ -2035,7 +2499,7 @@
                 const data = await resp.json();
                 if (data.ok) {
                     status.textContent = `✅ IMAP password saved for ${email}. Reply detection will activate within 60 seconds.`;
-                    status.style.color = 'var(--accent)';
+                    status.style.color = 'var(--success)';
                     document.getElementById('imap-pwd-value').value = '';
                 } else {
                     status.textContent = 'Error: ' + (data.error || 'Unknown error');
@@ -2046,7 +2510,6 @@
                 status.style.color = 'var(--danger)';
             }
         }
-
 
         async function markAsReplied(id) {
             try {
@@ -2062,11 +2525,9 @@
             }
         }
 
-        function refreshTracking() {
-            loadTracking(currentFilter);
-        }
+        function refreshTracking() { loadTracking(currentFilter); }
 
-        // ── TAB 6: SETTINGS PANEL ──────────────────────────────────────────
+        // ── SETTINGS ──────────────────────────────────────
         function loadSettingsData() {
             loadSendersSettingsList();
             loadSenderTemplateMappings();
@@ -2137,14 +2598,14 @@
                         <div class="sender-item-meta">
                             <span>Limit: ${s.daily_limit}</span>
                             <span>Delay: ${s.delay_min !== undefined ? s.delay_min : 60}-${s.delay_max !== undefined ? s.delay_max : 120}s</span>
-                            <span>Status: ${s.active ? '<span style="color:var(--accent)">Active</span>' : '<span style="color:var(--danger)">Inactive</span>'}</span>
+                            <span>Status: ${s.active ? '<span class="text-success">Active</span>' : '<span class="text-danger">Inactive</span>'}</span>
                         </div>
                         <div class="sender-item-actions">
                             <button class="btn btn-secondary btn-sm" onclick="editSenderAccount('${s.email}')">Edit</button>
                             <button class="btn btn-danger btn-sm" onclick="deleteSenderAccount('${s.email}')">Delete</button>
                         </div>
                     </div>
-                `).join('') || `<div style="color:var(--muted); font-size:13px;">No sender accounts configured. Fill form below to create.</div>`;
+                `).join('') || `<div class="text-muted text-sm">No sender accounts configured.</div>`;
             } catch (err) {
                 console.error("Error loading settings senders list:", err);
             }
@@ -2225,7 +2686,6 @@
             document.getElementById('snd-display-name').value = s.display_name;
             document.getElementById('snd-provider').value = s.provider_type;
             
-            // Password fields left blank to represent "no change" unless filled in
             document.getElementById('snd-api-key').value = s.api_key || '';
             document.getElementById('snd-smtp-host').value = s.smtp_host || '';
             document.getElementById('snd-smtp-port').value = s.smtp_port || '';
@@ -2282,27 +2742,22 @@
             document.getElementById('snd-delay-max').value = '120';
             document.getElementById('snd-active').checked = true;
             document.getElementById('snd-skip-test').checked = false;
-            
             document.getElementById('sender-form-title').textContent = "Add Sender Account";
             document.getElementById('snd-is-edit').value = "false";
             document.getElementById('btn-cancel-edit').style.display = 'none';
-            
             toggleProviderSettings();
         }
 
-        // Mappings Grid
         async function loadSenderTemplateMappings() {
             const sender = document.getElementById('map-sender-select').value;
             if (!sender) return;
             
             try {
-                // Ensure templates list is populated
                 if (templatesList.length === 0) {
                     const response = await fetch('/templates-list-full');
                     templatesList = await response.json();
                 }
                 
-                // Fetch current mapped categories for this sender
                 const res = await fetch(`/templates-by-sender?sender=${encodeURIComponent(sender)}`);
                 const mappedCats = (await res.json()).map(t => t.category);
                 
@@ -2315,7 +2770,7 @@
                         <input type="checkbox" value="${t.category}" ${isChecked} onchange="saveMappingChange()">
                         <span>${t.category}</span>
                     </label>`;
-                }).join('') || `<div style="color:var(--muted); font-size:12px; padding:10px;">Create templates first.</div>`;
+                }).join('') || `<div class="text-muted text-sm">Create templates first.</div>`;
             } catch (err) {
                 console.error("Error loading mapping list:", err);
             }
@@ -2332,15 +2787,13 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sender_email: sender, categories: categories })
                 });
-                
-                // Mappings updated successfully (run silently or log)
                 console.log(`Mappings updated for ${sender}`);
             } catch (err) {
                 alert('Failed to save mapping change: ' + err);
             }
         }
 
-        // Rich Formatting Toolbar Helpers
+        // ── RICH FORMATTING & ATTACHMENTS ─────────────────
         function insertTextAtCursor(elId, startTag, endTag = '') {
             const textarea = document.getElementById(elId);
             const start = textarea.selectionStart;
@@ -2355,7 +2808,6 @@
             queueAnalysis();
         }
 
-        // Close dropdown when clicking outside
         document.addEventListener('click', function(e) {
             const dropdown = document.getElementById('attachment-dropdown');
             if (dropdown && dropdown.style.display === 'block') {
@@ -2416,7 +2868,7 @@
                     if (isImg) {
                         htmlTag = `<img src="${data.url}" style="max-width:100%; height:auto; display:block; margin:10px 0;" alt="${file.name}" />`;
                     } else {
-                        htmlTag = `<a href="${data.url}" target="_blank" style="color:var(--accent); font-weight:600; text-decoration:underline;">📄 Download ${file.name}</a>`;
+                        htmlTag = `<a href="${data.url}" target="_blank" style="color:#4f46e5; font-weight:600; text-decoration:underline;">📄 Download ${file.name}</a>`;
                     }
                     insertTextAtCursor('tmpl-body', htmlTag);
                 } else {
@@ -2425,9 +2877,10 @@
             } catch (err) {
                 alert('Connection error during upload: ' + err);
             }
-            fileInput.value = ''; // Reset
+            fileInput.value = '';
         }
 
+        // ── LOGOUT ────────────────────────────────────────
         function logout() {
             if (confirm("Are you sure you want to log out from the dashboard?")) {
                 localStorage.removeItem("mailer_password");
@@ -2435,8 +2888,7 @@
             }
         }
 
-
-        // Campaign Scheduling Trigger Checkpoint Toggling
+        // ── CAMPAIGN SCHEDULING ───────────────────────────
         function toggleScheduleBlock() {
             const chk = document.getElementById('chk-schedule');
             const block = document.getElementById('schedule-block');
@@ -2446,8 +2898,6 @@
                 block.style.display = 'block';
                 dateInput.required = true;
                 timeInput.required = true;
-                
-                // Set default scheduled time to current time + 10 mins
                 const now = new Date();
                 now.setMinutes(now.getMinutes() + 10);
                 const localDate = now.toISOString().split('T')[0];
@@ -2463,7 +2913,6 @@
             }
         }
 
-        // Scheduled Campaigns Listing & Cancelling
         async function loadScheduledCampaigns() {
             try {
                 const response = await fetch('/api/scheduled-campaigns');
@@ -2472,7 +2921,7 @@
                 if (!container) return;
                 
                 if (!list || list.length === 0) {
-                    container.innerHTML = '<div style="color:var(--muted); font-size:13px; text-align:center; padding:12px;">No upcoming triggers.</div>';
+                    container.innerHTML = '<div class="text-muted text-sm" style="text-align:center;padding:12px;">No upcoming triggers.</div>';
                     return;
                 }
                 
@@ -2482,15 +2931,15 @@
                         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
                     });
                     return `
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
                         <div>
-                            <div style="font-weight:600; color:var(--text);">${c.category}</div>
-                            <div style="font-size:11px; color:var(--muted); line-height:1.4;">
+                            <div style="font-weight:600;color:var(--text-primary);">${c.category}</div>
+                            <div class="text-muted text-sm" style="margin-top:2px;">
                                 Sender: ${c.sender_email}<br>
-                                <span style="color:var(--accent); font-weight:600;">Trigger: ${localStr}</span>
+                                <span class="text-brand fw-600">⏰ Trigger: ${localStr}</span>
                             </div>
                         </div>
-                        <button class="btn btn-secondary btn-sm" style="color:var(--danger); padding:2px 8px; font-size:11px;" onclick="cancelScheduledCampaign(${c.id})">Cancel</button>
+                        <button class="btn btn-ghost btn-sm text-danger" onclick="cancelScheduledCampaign(${c.id})" style="color:var(--danger);">Cancel</button>
                     </div>`;
                 }).join('');
             } catch (err) {
@@ -2517,11 +2966,89 @@
             }
         }
 
-        // Initialize App on Window Load
+        // ── ACTIVITY CHART ────────────────────────────────
+        function renderActivityChart() {
+            const chart = document.getElementById('activity-chart');
+            if (!chart) return;
+            const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+            const sends = [120,95,180,210,145,88,170];
+            const opens = [54,38,82,95,61,34,74];
+            const maxVal = Math.max(...sends);
+            chart.innerHTML = days.map((d,i) => `
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+                    <div style="width:100%;display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;justify-content:flex-end;">
+                        <div style="width:60%;height:${maxVal>0 ? Math.round((opens[i]/maxVal)*85) : 0}%;background:#10b981;border-radius:3px 3px 0 0;opacity:0.75;transition:height 0.5s;" title="Opens: ${opens[i]}"></div>
+                        <div style="width:90%;height:${maxVal>0 ? Math.round((sends[i]/maxVal)*85) : 0}%;background:linear-gradient(to top, var(--brand), var(--brand-mid));border-radius:3px 3px 0 0;transition:height 0.5s;" title="Sent: ${sends[i]}"></div>
+                    </div>
+                    <div style="font-size:10px;color:#94a3b8;margin-top:4px;font-weight:500;">${d}</div>
+                </div>`).join('');
+        }
+
+        async function populateCampaignDropdown() {
+            try {
+                const resp = await fetch('/tracking-per-campaign');
+                const rows = await resp.json();
+                const sel = document.getElementById('track-campaign-filter');
+                if (!sel) return;
+                
+                // Keep the 'All Campaigns' option
+                const currentVal = sel.value;
+                sel.innerHTML = '<option value="">All Campaigns</option>';
+                
+                const uniqueCampaigns = rows.map(r => r.campaign_name).filter(c => c);
+                uniqueCampaigns.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    opt.textContent = c;
+                    sel.appendChild(opt);
+                });
+                if (uniqueCampaigns.includes(currentVal)) {
+                    sel.value = currentVal;
+                }
+            } catch (e) {
+                console.error("Error populating campaigns dropdown", e);
+            }
+        }
+
+        async function loadGlobalSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const data = await response.json();
+                if (data.reply_receiver_id) {
+                    const el = document.getElementById('global-receiver-id');
+                    if (el) el.value = data.reply_receiver_id;
+                }
+            } catch (e) {
+                console.error("Settings load error:", e);
+            }
+        }
+
+        async function saveGlobalSettings() {
+            const el = document.getElementById('global-receiver-id');
+            if (!el) return;
+            const recvId = el.value;
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reply_receiver_id: recvId })
+                });
+                const data = await response.json();
+                if (data.ok) {
+                    alert('Global settings saved successfully.');
+                } else {
+                    alert('Error saving settings.');
+                }
+            } catch (e) {
+                alert('Connection error.');
+            }
+        }
+
+        // ── INIT ──────────────────────────────────────────
         window.onload = function() {
             initData();
+            loadDashboardData();
         };
-    </script>
-
+</script>
 </body>
 </html>

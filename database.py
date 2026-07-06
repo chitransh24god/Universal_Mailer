@@ -204,8 +204,12 @@ def init_db():
             alerted_48h BOOLEAN DEFAULT FALSE
         );
     """)
-    
     # 6. Replies
+    try:
+        execute_query("ALTER TABLE sent_emails ADD COLUMN campaign_name TEXT DEFAULT '';")
+    except Exception:
+        pass
+        
     execute_query("""
         CREATE TABLE IF NOT EXISTS replies (
             id SERIAL PRIMARY KEY,

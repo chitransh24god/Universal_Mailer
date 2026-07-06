@@ -3,27 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VSD Finserv — Mailer Login</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>NexMail — Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bg: #f8fafc;
-            --surface: #ffffff;
-            --border: #e2e8f0;
-            --text: #0f172a;
-            --muted: #475569;
-            --accent: #059669;
-            --accent-glow: rgba(5, 150, 105, 0.08);
-        }
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Outfit', sans-serif;
-            background: var(--bg);
-            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            background: #0f172a;
+            color: #ffffff;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -31,126 +18,150 @@
             overflow: hidden;
             position: relative;
         }
-        /* Background animations */
-        body::before {
-            content: '';
+
+        /* Animated Background Gradients */
+        .bg-glow-1, .bg-glow-2 {
             position: absolute;
-            width: 300px;
-            height: 300px;
-            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
-            top: 20%;
-            left: 25%;
+            border-radius: 50%;
+            filter: blur(100px);
             z-index: 1;
-            filter: blur(40px);
+            animation: float 10s ease-in-out infinite;
         }
-        body::after {
-            content: '';
-            position: absolute;
-            width: 300px;
-            height: 300px;
-            background: radial-gradient(circle, rgba(5, 150, 105, 0.04) 0%, transparent 70%);
-            bottom: 20%;
-            right: 25%;
-            z-index: 1;
-            filter: blur(40px);
+        .bg-glow-1 {
+            width: 400px; height: 400px;
+            background: rgba(139, 92, 246, 0.4);
+            top: -100px; left: -100px;
         }
-        .box {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 40px;
-            width: 380px;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+        .bg-glow-2 {
+            width: 500px; height: 500px;
+            background: rgba(236, 72, 153, 0.3);
+            bottom: -150px; right: -150px;
+            animation-delay: -5s;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(30px) scale(1.1); }
+            100% { transform: translateY(0) scale(1); }
+        }
+
+        /* Login Box */
+        .login-box {
+            position: relative;
             z-index: 10;
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 48px;
+            width: 420px;
+            text-align: center;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            animation: slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+            transform: translateY(40px);
         }
-        .box:hover {
-            border-color: rgba(5, 150, 105, 0.25);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.05), 0 0 20px rgba(5, 150, 105, 0.03);
+
+        @keyframes slideUpFade {
+            to { opacity: 1; transform: translateY(0); }
         }
+
+        /* Icon Animation */
         .icon {
-            width: 56px;
-            height: 56px;
-            background: var(--accent-glow);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 24px;
-            border: 1px solid rgba(5, 150, 105, 0.15);
-            box-shadow: 0 4px 10px rgba(5, 150, 105, 0.05);
+            width: 72px; height: 72px;
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
+            border-radius: 20px;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 30px;
+            box-shadow: 0 10px 20px rgba(139, 92, 246, 0.3);
+            position: relative;
         }
         .icon svg {
-            fill: var(--accent);
+            width: 32px; height: 32px; fill: #ffffff;
+            animation: pulseIcon 2s ease-in-out infinite;
         }
-        h2 {
-            font-size: 24px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            letter-spacing: -0.5px;
-            color: var(--text);
+        @keyframes pulseIcon {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
         }
-        p {
-            font-size: 14px;
-            color: var(--muted);
-            margin-bottom: 30px;
-        }
+
+        h2 { font-size: 28px; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.5px; }
+        p { font-size: 15px; color: #94a3b8; margin-bottom: 36px; }
+
+        /* Input */
+        .input-group { position: relative; margin-bottom: 24px; text-align: left; }
         input {
             width: 100%;
-            padding: 12px 16px;
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
+            padding: 16px 20px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
             font-size: 15px;
-            color: var(--text);
-            margin-bottom: 18px;
+            color: #ffffff;
             outline: none;
-            font-family: 'Outfit', sans-serif;
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
         }
+        input::placeholder { color: #64748b; }
         input:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-glow);
-            background: #ffffff;
+            border-color: #8b5cf6;
+            background: rgba(15, 23, 42, 0.8);
+            box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.2);
         }
+
+        /* Button */
         button {
             width: 100%;
-            padding: 12px;
-            background: var(--accent);
+            padding: 16px;
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
             color: #ffffff;
             border: none;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 600;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
             cursor: pointer;
-            font-family: 'Outfit', sans-serif;
-            box-shadow: 0 4px 15px rgba(5, 150, 105, 0.2);
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(236, 72, 153, 0.3);
+            position: relative;
+            overflow: hidden;
         }
         button:hover {
-            background: #047857;
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(5, 150, 105, 0.25);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(236, 72, 153, 0.4);
         }
-        button:active {
-            transform: translateY(0);
+        button:active { transform: translateY(0); }
+
+        /* Shimmer effect on button */
+        button::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; width: 50%; height: 100%;
+            background: linear-gradient(to right, transparent, rgba(255,255,255,0.3), transparent);
+            transform: skewX(-20deg);
         }
+        button:hover::after { animation: shimmer 0.7s forwards; }
+        @keyframes shimmer { 100% { left: 200%; } }
     </style>
 </head>
 <body>
-    <div class="box">
+    <div class="bg-glow-1"></div>
+    <div class="bg-glow-2"></div>
+    
+    <div class="login-box">
         <div class="icon">
-            <svg width="26" height="26" viewBox="0 0 24 24">
+            <svg viewBox="0 0 24 24">
                 <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/>
             </svg>
         </div>
-        <h2>VSD Finserv Mailer</h2>
-        <p>Enter password to access dashboard</p>
-        <input type="password" id="pwd" placeholder="Password" onkeydown="if(event.key==='Enter')login()">
+        <h2>Welcome to NexMail</h2>
+        <p>Enter your password to access the platform</p>
+        
+        <div class="input-group">
+            <input type="password" id="pwd" placeholder="Enter Password" onkeydown="if(event.key==='Enter')login()">
+        </div>
         <button onclick="login()">Access Dashboard</button>
     </div>
+
     <script>
         function login() {
             var p = document.getElementById('pwd').value;
@@ -159,7 +170,6 @@
                 window.location.href = '/?pwd=' + encodeURIComponent(p);
             }
         }
-        // Auto redirect if password already exists in storage
         window.onload = function() {
             var stored = localStorage.getItem("mailer_password");
             if (stored && window.location.search.indexOf("pwd") === -1) {
