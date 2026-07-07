@@ -866,8 +866,9 @@ select.form-control {
       <div class="topbar-right">
         <!-- Search Bar -->
         <div class="topbar-search" style="position:relative; margin-right: 12px;">
-          <input type="text" id="global-search" onkeyup="handleGlobalSearch(event)" placeholder="Search (e.g. templates, monitor)..." class="form-control" style="border-radius:20px; padding:6px 16px 6px 32px; width: 220px; font-size:12px; background:var(--surface2);">
+          <input type="text" id="global-search" oninput="showSearchSuggestions(event)" onkeydown="handleGlobalSearchKey(event)" placeholder="Search tabs..." class="form-control" autocomplete="off" style="border-radius:20px; padding:6px 16px 6px 32px; width: 220px; font-size:12px; background:var(--surface2);">
           <svg style="position:absolute; left:10px; top:8px; width:14px; height:14px; stroke:var(--text-muted); fill:none; stroke-width:2;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <div id="search-suggestions" style="display:none; position:absolute; top:36px; left:0; width:100%; background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.1); z-index:100; overflow:hidden;"></div>
         </div>
         <!-- Quick stats -->
         <div class="topbar-stats">
@@ -1735,33 +1736,98 @@ select.form-control {
             }
         }
         
-        function handleGlobalSearch(e) {
-            if (e.key === 'Enter') {
-                const query = e.target.value.toLowerCase().trim();
-                if (!query) return;
+        const searchKeywords = [
+            { id: 'nav-dashboard', tab: 'dashboard', label: 'Dashboard', keywords: ['dash', 'home', 'overview', 'main'] },
+            { id: 'nav-launch', tab: 'launch', label: 'Launch Campaign', keywords: ['launch', 'new', 'send', 'campaign'] },
+            { id: 'nav-templates', tab: 'templates', label: 'Templates', keywords: ['template', 'edit', 'design', 'email'] },
+            { id: 'nav-draft', tab: 'draft', label: 'Draft Preview', keywords: ['draft', 'preview', 'test'] },
+            { id: 'nav-monitor', tab: 'monitor', label: 'Live Monitor', keywords: ['monitor', 'live', 'active', 'progress'] },
+            { id: 'nav-tracking', tab: 'tracking', label: 'Email Tracking', keywords: ['track', 'analytic', 'report', 'stats'] },
+            { id: 'nav-settings', tab: 'settings', label: 'Settings', keywords: ['set', 'config', 'password', 'account', 'sender'] }
+        ];
 
-                let targetTab = null;
-                let navId = null;
+        let currentSearchFocus = -1;
 
-                if (query.includes('dash') || query.includes('home') || query.includes('overview')) { targetTab = 'dashboard'; navId = 'nav-dashboard'; }
-                else if (query.includes('launch') || query.includes('new') || query.includes('send')) { targetTab = 'launch'; navId = 'nav-launch'; }
-                else if (query.includes('template') || query.includes('edit')) { targetTab = 'templates'; navId = 'nav-templates'; }
-                else if (query.includes('draft') || query.includes('preview')) { targetTab = 'draft'; navId = 'nav-draft'; }
-                else if (query.includes('monitor') || query.includes('live') || query.includes('active')) { targetTab = 'monitor'; navId = 'nav-monitor'; }
-                else if (query.includes('track') || query.includes('analytic') || query.includes('report')) { targetTab = 'tracking'; navId = 'nav-tracking'; }
-                else if (query.includes('set') || query.includes('config') || query.includes('password') || query.includes('account')) { targetTab = 'settings'; navId = 'nav-settings'; }
-
-                if (targetTab && navId) {
-                    const navBtn = document.getElementById(navId);
-                    if (navBtn) {
-                        switchTab(targetTab, navBtn);
-                        e.target.value = ''; // Clear search bar after navigation
-                    }
-                } else {
-                    alert('No matching section found for "' + query + '". Try "templates", "monitor", "tracking", etc.');
-                }
+        function showSearchSuggestions(e) {
+            const val = e.target.value.toLowerCase().trim();
+            const suggBox = document.getElementById('search-suggestions');
+            suggBox.innerHTML = '';
+            currentSearchFocus = -1;
+            
+            if (!val) {
+                suggBox.style.display = 'none';
+                return;
+            }
+            
+            let matches = searchKeywords.filter(item => {
+                return item.label.toLowerCase().includes(val) || item.keywords.some(k => k.includes(val));
+            });
+            
+            if (matches.length > 0) {
+                suggBox.style.display = 'block';
+                matches.forEach((match, index) => {
+                    const div = document.createElement('div');
+                    div.style.padding = '8px 12px';
+                    div.style.cursor = 'pointer';
+                    div.style.fontSize = '12px';
+                    div.style.borderBottom = index === matches.length - 1 ? 'none' : '1px solid var(--border)';
+                    div.className = 'search-item';
+                    div.innerHTML = `<span style="font-weight:600;color:var(--text);">${match.label}</span>`;
+                    div.onmouseover = () => {
+                        Array.from(suggBox.children).forEach(c => c.style.background = '#fff');
+                        div.style.background = '#f1f5f9';
+                        currentSearchFocus = index;
+                    };
+                    div.onclick = () => {
+                        document.getElementById('global-search').value = '';
+                        suggBox.style.display = 'none';
+                        switchTab(match.tab, document.getElementById(match.id));
+                    };
+                    suggBox.appendChild(div);
+                });
+            } else {
+                suggBox.style.display = 'none';
             }
         }
+        
+        function handleGlobalSearchKey(e) {
+            const suggBox = document.getElementById('search-suggestions');
+            let items = suggBox.children;
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                currentSearchFocus++;
+                addSearchActive(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                currentSearchFocus--;
+                addSearchActive(items);
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (currentSearchFocus > -1 && items.length > 0) {
+                    items[currentSearchFocus].click();
+                } else if (items.length > 0) {
+                    items[0].click();
+                }
+            } else if (e.key === 'Escape') {
+                suggBox.style.display = 'none';
+            }
+        }
+        
+        function addSearchActive(items) {
+            if (!items || items.length === 0) return;
+            Array.from(items).forEach(item => item.style.background = '#fff');
+            if (currentSearchFocus >= items.length) currentSearchFocus = 0;
+            if (currentSearchFocus < 0) currentSearchFocus = items.length - 1;
+            items[currentSearchFocus].style.background = '#f1f5f9';
+        }
+        
+        document.addEventListener('click', function(e) {
+            if (e.target.id !== 'global-search') {
+                const suggBox = document.getElementById('search-suggestions');
+                if (suggBox) suggBox.style.display = 'none';
+            }
+        });
         
         function toggleSidebar() {
             document.querySelector('.sidebar').classList.toggle('collapsed');
