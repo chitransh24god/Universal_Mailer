@@ -866,7 +866,7 @@ select.form-control {
       <div class="topbar-right">
         <!-- Search Bar -->
         <div class="topbar-search" style="position:relative; margin-right: 12px;">
-          <input type="text" placeholder="Search campaigns..." class="form-control" style="border-radius:20px; padding:6px 16px 6px 32px; width: 220px; font-size:12px; background:var(--surface2);">
+          <input type="text" id="global-search" onkeyup="handleGlobalSearch(event)" placeholder="Search (e.g. templates, monitor)..." class="form-control" style="border-radius:20px; padding:6px 16px 6px 32px; width: 220px; font-size:12px; background:var(--surface2);">
           <svg style="position:absolute; left:10px; top:8px; width:14px; height:14px; stroke:var(--text-muted); fill:none; stroke-width:2;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </div>
         <!-- Quick stats -->
@@ -1732,6 +1732,34 @@ select.form-control {
             } else if (tabName === 'settings') {
                 loadSettingsData();
                 loadGlobalSettings();
+            }
+        }
+        
+        function handleGlobalSearch(e) {
+            if (e.key === 'Enter') {
+                const query = e.target.value.toLowerCase().trim();
+                if (!query) return;
+
+                let targetTab = null;
+                let navId = null;
+
+                if (query.includes('dash') || query.includes('home') || query.includes('overview')) { targetTab = 'dashboard'; navId = 'nav-dashboard'; }
+                else if (query.includes('launch') || query.includes('new') || query.includes('send')) { targetTab = 'launch'; navId = 'nav-launch'; }
+                else if (query.includes('template') || query.includes('edit')) { targetTab = 'templates'; navId = 'nav-templates'; }
+                else if (query.includes('draft') || query.includes('preview')) { targetTab = 'draft'; navId = 'nav-draft'; }
+                else if (query.includes('monitor') || query.includes('live') || query.includes('active')) { targetTab = 'monitor'; navId = 'nav-monitor'; }
+                else if (query.includes('track') || query.includes('analytic') || query.includes('report')) { targetTab = 'tracking'; navId = 'nav-tracking'; }
+                else if (query.includes('set') || query.includes('config') || query.includes('password') || query.includes('account')) { targetTab = 'settings'; navId = 'nav-settings'; }
+
+                if (targetTab && navId) {
+                    const navBtn = document.getElementById(navId);
+                    if (navBtn) {
+                        switchTab(targetTab, navBtn);
+                        e.target.value = ''; // Clear search bar after navigation
+                    }
+                } else {
+                    alert('No matching section found for "' + query + '". Try "templates", "monitor", "tracking", etc.');
+                }
             }
         }
         
