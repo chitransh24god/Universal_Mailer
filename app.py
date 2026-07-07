@@ -1538,20 +1538,29 @@ async def tracking_summary():
 async def activity_chart():
     """Return last 7 days of email activity for the Dashboard chart."""
     try:
-        from datetime import date, timedelta
-        cutoff_date = (date.today() - timedelta(days=6)).strftime("%Y-%m-%d")
+        from datetime import date, timedelta, datetime
+        max_date_row = execute_query("SELECT MAX(DATE(sent_at)) as max_dt FROM sent_emails;", fetch="one")
+        
+        end_date = date.today()
+        if max_date_row and max_date_row["max_dt"]:
+            db_max = datetime.strptime(max_date_row["max_dt"], "%Y-%m-%d").date()
+            if (end_date - db_max).days > 6:
+                end_date = db_max
+                
+        cutoff_date = (end_date - timedelta(days=6)).strftime("%Y-%m-%d")
+        
         rows = execute_query("""
             SELECT DATE(sent_at) as dt, 
                    COUNT(*) as sent, 
                    SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) as opened
             FROM sent_emails
-            WHERE DATE(sent_at) >= %s
+            WHERE DATE(sent_at) >= %s AND DATE(sent_at) <= %s
             GROUP BY DATE(sent_at)
             ORDER BY DATE(sent_at) ASC;
-        """, [cutoff_date], fetch="all")
+        """, [cutoff_date, end_date.strftime("%Y-%m-%d")], fetch="all")
         
         # Fill in missing days
-        data = { (date.today() - timedelta(days=i)).strftime("%Y-%m-%d"): {"sent": 0, "opened": 0} for i in range(6, -1, -1) }
+        data = { (end_date - timedelta(days=i)).strftime("%Y-%m-%d"): {"sent": 0, "opened": 0} for i in range(6, -1, -1) }
         if rows:
             for r in rows:
                 if r["dt"] in data:

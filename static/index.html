@@ -940,7 +940,7 @@ select.form-control {
           <div class="card">
             <div class="card-header">
               <div>
-                <div class="card-title">📈 Email Activity — Last 7 Days</div>
+                <div class="card-title">📉 Recent Email Activity</div>
                 <div class="card-subtitle">Sends vs. opens by day of week</div>
               </div>
               <div class="flex-row text-sm text-muted">
@@ -2985,14 +2985,83 @@ select.form-control {
             const opens = dates.map(d => data[d].opened);
             
             const maxVal = Math.max(...sends, 10); // Minimum scale of 10
-            chart.innerHTML = days.map((d,i) => `
-                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
-                    <div style="width:100%;display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;justify-content:flex-end;">
-                        <div style="width:60%;height:${Math.round((opens[i]/maxVal)*85)}%;background:#10b981;border-radius:3px 3px 0 0;opacity:0.75;transition:height 0.5s;" title="Opens: ${opens[i]}"></div>
-                        <div style="width:90%;height:${Math.round((sends[i]/maxVal)*85)}%;background:linear-gradient(to top, var(--brand), var(--brand-mid));border-radius:3px 3px 0 0;transition:height 0.5s;" title="Sent: ${sends[i]}"></div>
-                    </div>
-                    <div style="font-size:10px;color:#94a3b8;margin-top:4px;font-weight:500;">${d}</div>
-                </div>`).join('');
+            
+            const w = 100;
+            const h = 85;
+            const stepX = days.length > 1 ? w / (days.length - 1) : 0;
+            
+            const ptsSends = sends.map((val, i) => [i * stepX, h - (val/maxVal)*h]);
+            const ptsOpens = opens.map((val, i) => [i * stepX, h - (val/maxVal)*h]);
+
+            function catmullRom2bezier(points) {
+                if (points.length === 0) return '';
+                if (points.length === 1) return `M ${points[0][0]},${points[0][1]}`;
+                let d = `M ${points[0][0]},${points[0][1]}`;
+                for (let i = 0; i < points.length - 1; i++) {
+                    const p0 = points[i===0 ? 0 : i-1];
+                    const p1 = points[i];
+                    const p2 = points[i+1];
+                    const p3 = points[i+2 === points.length ? i+1 : i+2];
+                    const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
+                    const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
+                    const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
+                    const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
+                    d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2[0]},${p2[1]}`;
+                }
+                return d;
+            }
+
+            const sendsPath = catmullRom2bezier(ptsSends);
+            const opensPath = catmullRom2bezier(ptsOpens);
+
+            chart.style.display = 'block';
+            chart.style.position = 'relative';
+
+            chart.innerHTML = `
+                <svg width="100%" height="85%" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="overflow:visible;margin-top:8px;">
+                    <path fill="none" stroke="var(--brand)" stroke-width="2" d="${sendsPath}" vector-effect="non-scaling-stroke" />
+                    <path fill="none" stroke="#10b981" stroke-width="2" d="${opensPath}" vector-effect="non-scaling-stroke" />
+                </svg>
+                <div id="chart-hover-layer" style="position:absolute;top:0;left:0;width:100%;height:85%;margin-top:8px;"></div>
+                <div id="chart-tooltip" style="position:absolute; display:none; background:#1e293b; color:#fff; padding:6px 10px; border-radius:4px; font-size:11px; pointer-events:none; z-index:10; white-space:nowrap; transform:translate(-50%,-100%); margin-top:-10px; box-shadow:0 4px 6px rgba(0,0,0,0.1);"></div>
+                <div id="chart-cursor-line" style="position:absolute; display:none; width:1px; height:85%; background:rgba(148, 163, 184, 0.3); pointer-events:none; top:0; margin-top:8px;"></div>
+                <div style="display:flex;justify-content:space-between;width:100%;margin-top:8px;padding-top:4px;">
+                    ${days.map(d => `<div style="font-size:10px;color:#94a3b8;font-weight:500;">${d}</div>`).join('')}
+                </div>`;
+
+            const hoverLayer = document.getElementById('chart-hover-layer');
+            const tooltip = document.getElementById('chart-tooltip');
+            const cursorLine = document.getElementById('chart-cursor-line');
+            
+            hoverLayer.addEventListener('mousemove', (e) => {
+                const rect = hoverLayer.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const ratio = x / rect.width;
+                let index = Math.round(ratio * (days.length - 1));
+                if (index < 0) index = 0;
+                if (index >= days.length) index = days.length - 1;
+                
+                const pointX = (index / (days.length - 1)) * rect.width;
+                
+                cursorLine.style.display = 'block';
+                cursorLine.style.left = pointX + 'px';
+                
+                tooltip.style.display = 'block';
+                tooltip.style.left = pointX + 'px';
+                
+                const sentY = ptsSends[index][1];
+                const openY = ptsOpens[index][1];
+                const minY = Math.min(sentY, openY);
+                tooltip.style.top = (minY / h * rect.height) + 'px';
+                
+                tooltip.innerHTML = `<div style="font-weight:600;margin-bottom:2px;border-bottom:1px solid #334155;padding-bottom:2px;">${dates[index]}</div>
+                                     <div style="display:flex;align-items:center;gap:4px;"><div style="width:8px;height:8px;background:var(--brand);border-radius:2px;"></div>Sent: ${sends[index]}</div>
+                                     <div style="display:flex;align-items:center;gap:4px;"><div style="width:8px;height:8px;background:#10b981;border-radius:2px;"></div>Opened: ${opens[index]}</div>`;
+            });
+            hoverLayer.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+                cursorLine.style.display = 'none';
+            });
         }
 
         async function populateCampaignDropdown() {
@@ -3006,7 +3075,8 @@ select.form-control {
                 const currentVal = sel.value;
                 sel.innerHTML = '<option value="">All Campaigns</option>';
                 
-                const uniqueCampaigns = rows.map(r => r.campaign_name).filter(c => c);
+                const allCampaigns = rows.map(r => r.campaign_name).filter(c => c);
+                const uniqueCampaigns = [...new Set(allCampaigns)];
                 uniqueCampaigns.forEach(c => {
                     const opt = document.createElement('option');
                     opt.value = c;
