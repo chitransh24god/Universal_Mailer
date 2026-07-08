@@ -1543,7 +1543,16 @@ async def activity_chart():
         
         end_date = date.today()
         if max_date_row and max_date_row["max_dt"]:
-            db_max = datetime.strptime(max_date_row["max_dt"], "%Y-%m-%d").date()
+            dt_val = max_date_row["max_dt"]
+            if isinstance(dt_val, str):
+                db_max = datetime.strptime(dt_val, "%Y-%m-%d").date()
+            else:
+                # In Postgres, DATE() returns a datetime.date object
+                if hasattr(dt_val, 'date'):
+                    db_max = dt_val.date()
+                else:
+                    db_max = dt_val
+                    
             if (end_date - db_max).days > 6:
                 end_date = db_max
                 

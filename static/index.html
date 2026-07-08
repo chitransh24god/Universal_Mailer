@@ -3068,7 +3068,12 @@ select.form-control {
         // ── ACTIVITY CHART ────────────────────────────────
         function renderActivityChart(data) {
             const chart = document.getElementById('activity-chart');
-            if (!chart || !data) return;
+            if (!chart || !data || data.error || Object.keys(data).length === 0) {
+                if (chart) {
+                    chart.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px;">No activity data available</div>';
+                }
+                return;
+            }
             
             const dates = Object.keys(data).sort();
             const days = dates.map(d => {
