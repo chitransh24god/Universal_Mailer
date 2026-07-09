@@ -1572,8 +1572,9 @@ async def activity_chart():
         data = { (end_date - timedelta(days=i)).strftime("%Y-%m-%d"): {"sent": 0, "opened": 0} for i in range(6, -1, -1) }
         if rows:
             for r in rows:
-                if r["dt"] in data:
-                    data[r["dt"]] = {"sent": r["sent"] or 0, "opened": r["opened"] or 0}
+                dt_str = str(r["dt"])
+                if dt_str in data:
+                    data[dt_str] = {"sent": r["sent"] or 0, "opened": r["opened"] or 0}
                     
         return JSONResponse(data)
     except Exception as e:
