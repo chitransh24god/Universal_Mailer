@@ -24,7 +24,7 @@ def get_connection():
     conn.row_factory = sqlite3.Row
     return conn, True  # True means IS sqlite
 
-def execute_query(query, params=None, fetch=None, commit=True):
+def execute_query(query, params=None, fetch=None, commit=True, silent=False):
     """
     Executes a query and handles differences between SQLite and PostgreSQL.
     Translates '%s' placeholder to '?' if SQLite is active.
@@ -77,7 +77,8 @@ def execute_query(query, params=None, fetch=None, commit=True):
     except Exception as e:
         if commit:
             conn.rollback()
-        print(f"[DB Error] Query: {query} | Error: {e}")
+        if not silent:
+            print(f"[DB Error] Query: {query} | Error: {e}")
         raise e
     finally:
         conn.close()
@@ -159,12 +160,12 @@ def init_db():
     # Run migrations for new columns
     if not check_column_exists("sender_accounts", "delay_min"):
         try:
-            execute_query("ALTER TABLE sender_accounts ADD COLUMN delay_min INTEGER DEFAULT 60;")
+            execute_query("ALTER TABLE sender_accounts ADD COLUMN delay_min INTEGER DEFAULT 60;", silent=True)
         except Exception:
             pass
     if not check_column_exists("sender_accounts", "delay_max"):
         try:
-            execute_query("ALTER TABLE sender_accounts ADD COLUMN delay_max INTEGER DEFAULT 120;")
+            execute_query("ALTER TABLE sender_accounts ADD COLUMN delay_max INTEGER DEFAULT 120;", silent=True)
         except Exception:
             pass
     
@@ -206,7 +207,7 @@ def init_db():
     """)
     # 6. Replies
     try:
-        execute_query("ALTER TABLE sent_emails ADD COLUMN campaign_name TEXT DEFAULT '';")
+        execute_query("ALTER TABLE sent_emails ADD COLUMN campaign_name TEXT DEFAULT '';", silent=True)
     except Exception:
         pass
         
