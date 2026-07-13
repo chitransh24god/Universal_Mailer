@@ -2690,13 +2690,16 @@ select.form-control {
                 const list = await response.json();
                 
                 const container = document.getElementById('settings-senders-list');
-                container.innerHTML = list.map(s => `
+                container.innerHTML = list.map(s => {
+                    const bounceRate = s.all_time_sent > 0 ? ((s.all_time_bounced / s.all_time_sent) * 100).toFixed(1) : '0.0';
+                    return `
                     <div class="sender-item-card">
                         <div class="sender-item-title">${s.display_name}</div>
                         <div class="sender-item-subtitle">${s.email} (${s.provider_type.toUpperCase()})</div>
                         <div class="sender-item-meta">
                             <span>Limit: ${s.daily_limit}</span>
                             <span>Delay: ${s.delay_min !== undefined ? s.delay_min : 60}-${s.delay_max !== undefined ? s.delay_max : 120}s</span>
+                            <span style="color: ${bounceRate > 5 ? 'var(--danger)' : 'inherit'}">Bounce: ${bounceRate}%</span>
                             <span>Status: ${s.active ? '<span class="text-success">Active</span>' : '<span class="text-danger">Inactive</span>'}</span>
                         </div>
                         <div class="sender-item-actions">

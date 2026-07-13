@@ -954,10 +954,28 @@ async def save_settings(request: Request):
 async def get_senders():
     try:
         rows = execute_query("SELECT email, display_name, provider_type, api_key, smtp_host, smtp_port, smtp_username, imap_host, imap_port, daily_limit, delay_min, delay_max, active FROM sender_accounts ORDER BY email;", fetch="all")
+        
+        # Batch fetch stats
+        sender_stats = execute_query("""
+            SELECT sender_email, COUNT(*) as total_sent,
+                   SUM(CASE WHEN alerted_48h=TRUE AND opened=FALSE THEN 1 ELSE 0 END) as total_bounced
+            FROM sent_emails GROUP BY sender_email;
+        """, fetch="all")
+        stats_map = {}
+        if sender_stats:
+            for s in sender_stats:
+                stats_map[s["sender_email"]] = {
+                    "sent": int(s.get("total_sent") or 0),
+                    "bounced": int(s.get("total_bounced") or 0)
+                }
+
         result = []
         for r in rows:
             d = dict(r)
             d["sent_today"] = get_sender_today_sent(d["email"])
+            st = stats_map.get(d["email"], {"sent": 0, "bounced": 0})
+            d["all_time_sent"] = st["sent"]
+            d["all_time_bounced"] = st["bounced"]
             result.append(d)
         return JSONResponse(result)
     except Exception as e:
