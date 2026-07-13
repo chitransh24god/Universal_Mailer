@@ -2707,7 +2707,8 @@ select.form-control {
                             <button class="btn btn-danger btn-sm" onclick="deleteSenderAccount('${s.email}')">Delete</button>
                         </div>
                     </div>
-                `).join('') || `<div class="text-muted text-sm">No sender accounts configured.</div>`;
+                    `;
+                }).join('') || `<div class="text-muted text-sm">No sender accounts configured.</div>`;
             } catch (err) {
                 console.error("Error loading settings senders list:", err);
             }
