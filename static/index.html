@@ -947,6 +947,7 @@ select.form-control {
               <div class="flex-row text-sm text-muted">
                 <span style="display:flex;align-items:center;gap:4px;"><span style="width:9px;height:9px;background:#6366f1;border-radius:2px;display:inline-block;"></span>Sent</span>
                 <span style="display:flex;align-items:center;gap:4px;"><span style="width:9px;height:9px;background:#10b981;border-radius:2px;display:inline-block;"></span>Opened</span>
+                <span style="display:flex;align-items:center;gap:4px;"><span style="width:9px;height:9px;background:#ef4444;border-radius:2px;display:inline-block;"></span>Bounced</span>
               </div>
             </div>
             <div class="chart-bars" id="activity-chart"></div>
@@ -2375,6 +2376,9 @@ select.form-control {
                 document.getElementById('tr-48h').textContent     = sum.not_opened_48h || 0;
                 const openRate = total > 0 ? Math.round((opened / total) * 100) : 0;
                 document.getElementById('tr-open-rate').textContent = openRate + '%';
+                const bounced = sum.not_opened_48h || 0;
+                const bounceRate = total > 0 ? Math.round((bounced / total) * 100) : 0;
+                document.getElementById('tr-bounce-rate').textContent = bounceRate + '%';
                 
                 const btn = document.getElementById('btn-export-csv');
                 if (btn) {
@@ -3086,8 +3090,9 @@ select.form-control {
             });
             const sends = dates.map(d => data[d].sent);
             const opens = dates.map(d => data[d].opened);
+            const bounces = dates.map(d => data[d].bounced || 0);
             
-            const maxVal = Math.max(...sends, 10); // Minimum scale of 10
+            const maxVal = Math.max(...sends, ...opens, ...bounces, 10); // Minimum scale of 10
             
             const w = 100;
             const h = 85;
@@ -3095,6 +3100,7 @@ select.form-control {
             
             const ptsSends = sends.map((val, i) => [i * stepX, h - (val/maxVal)*h]);
             const ptsOpens = opens.map((val, i) => [i * stepX, h - (val/maxVal)*h]);
+            const ptsBounces = bounces.map((val, i) => [i * stepX, h - (val/maxVal)*h]);
 
             function catmullRom2bezier(points) {
                 if (points.length === 0) return '';
@@ -3116,6 +3122,7 @@ select.form-control {
 
             const sendsPath = catmullRom2bezier(ptsSends);
             const opensPath = catmullRom2bezier(ptsOpens);
+            const bouncesPath = catmullRom2bezier(ptsBounces);
 
             chart.style.display = 'block';
             chart.style.position = 'relative';
@@ -3124,6 +3131,7 @@ select.form-control {
                 <svg width="100%" height="85%" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="overflow:visible;margin-top:8px;">
                     <path fill="none" stroke="var(--brand)" stroke-width="2" d="${sendsPath}" vector-effect="non-scaling-stroke" />
                     <path fill="none" stroke="#10b981" stroke-width="2" d="${opensPath}" vector-effect="non-scaling-stroke" />
+                    <path fill="none" stroke="#ef4444" stroke-width="2" d="${bouncesPath}" vector-effect="non-scaling-stroke" />
                 </svg>
                 <div id="chart-hover-layer" style="position:absolute;top:0;left:0;width:100%;height:85%;margin-top:8px;"></div>
                 <div id="chart-tooltip" style="position:absolute; display:none; background:#1e293b; color:#fff; padding:6px 10px; border-radius:4px; font-size:11px; pointer-events:none; z-index:10; white-space:nowrap; transform:translate(-50%,-100%); margin-top:-10px; box-shadow:0 4px 6px rgba(0,0,0,0.1);"></div>
@@ -3159,7 +3167,8 @@ select.form-control {
                 
                 tooltip.innerHTML = `<div style="font-weight:600;margin-bottom:2px;border-bottom:1px solid #334155;padding-bottom:2px;">${dates[index]}</div>
                                      <div style="display:flex;align-items:center;gap:4px;"><div style="width:8px;height:8px;background:var(--brand);border-radius:2px;"></div>Sent: ${sends[index]}</div>
-                                     <div style="display:flex;align-items:center;gap:4px;"><div style="width:8px;height:8px;background:#10b981;border-radius:2px;"></div>Opened: ${opens[index]}</div>`;
+                                     <div style="display:flex;align-items:center;gap:4px;"><div style="width:8px;height:8px;background:#10b981;border-radius:2px;"></div>Opened: ${opens[index]}</div>
+                                     <div style="display:flex;align-items:center;gap:4px;"><div style="width:8px;height:8px;background:#ef4444;border-radius:2px;"></div>Bounced: ${bounces[index]}</div>`;
             });
             hoverLayer.addEventListener('mouseleave', () => {
                 tooltip.style.display = 'none';

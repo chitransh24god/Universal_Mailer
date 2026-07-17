@@ -1579,7 +1579,8 @@ async def activity_chart():
         rows = execute_query("""
             SELECT DATE(sent_at) as dt, 
                    COUNT(*) as sent, 
-                   SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) as opened
+                   SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) as opened,
+                   SUM(CASE WHEN alerted_48h=TRUE AND opened=FALSE THEN 1 ELSE 0 END) as bounced
             FROM sent_emails
             WHERE DATE(sent_at) >= %s AND DATE(sent_at) <= %s
             GROUP BY DATE(sent_at)
@@ -1587,12 +1588,12 @@ async def activity_chart():
         """, [cutoff_date, end_date.strftime("%Y-%m-%d")], fetch="all")
         
         # Fill in missing days
-        data = { (end_date - timedelta(days=i)).strftime("%Y-%m-%d"): {"sent": 0, "opened": 0} for i in range(6, -1, -1) }
+        data = { (end_date - timedelta(days=i)).strftime("%Y-%m-%d"): {"sent": 0, "opened": 0, "bounced": 0} for i in range(6, -1, -1) }
         if rows:
             for r in rows:
                 dt_str = str(r["dt"])
                 if dt_str in data:
-                    data[dt_str] = {"sent": r["sent"] or 0, "opened": r["opened"] or 0}
+                    data[dt_str] = {"sent": r["sent"] or 0, "opened": r["opened"] or 0, "bounced": r["bounced"] or 0}
                     
         return JSONResponse(data)
     except Exception as e:
