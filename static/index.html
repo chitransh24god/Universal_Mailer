@@ -1325,7 +1325,7 @@ select.form-control {
         </div>
 
         <!-- Summary stat cards -->
-        <div class="kpi-grid mb-16" style="grid-template-columns:repeat(5,1fr);">
+        <div class="kpi-grid mb-16" style="grid-template-columns:repeat(6,1fr);">
           <div class="kpi-card" style="--kpi-color:#6366f1;--kpi-icon-bg:#eef2ff;padding:14px 16px;">
             <div class="kpi-label" style="font-size:10px;">Total Sent</div>
             <div class="kpi-value" style="font-size:22px;" id="tr-total">—</div>
@@ -1362,6 +1362,7 @@ select.form-control {
               <button id="tr-btn-replied"   class="btn btn-secondary btn-sm" onclick="loadTracking('replied')">Replied</button>
               <button id="tr-btn-not_opened"class="btn btn-secondary btn-sm" onclick="loadTracking('not_opened')">Not Opened</button>
               <button id="tr-btn-alert_48h" class="btn btn-secondary btn-sm" onclick="loadTracking('alert_48h')">48h Alert</button>
+              <button id="tr-btn-bounced" class="btn btn-secondary btn-sm" onclick="loadTracking('bounced')">Bounced</button>
             </div>
             <div class="flex-row flex-wrap gap-8">
               <select id="track-campaign-filter" class="form-control" style="width: 180px;" onchange="applyFilters()">
@@ -2344,7 +2345,7 @@ select.form-control {
         async function loadTracking(filter) {
             currentFilter = filter;
             
-            ['all','opened','replied','not_opened','alert_48h'].forEach(f => {
+            ['all','opened','replied','not_opened','alert_48h','bounced'].forEach(f => {
                 const btn = document.getElementById('tr-btn-' + f);
                 if (btn) {
                     btn.style.background = (f === filter) ? 'var(--brand)' : '';

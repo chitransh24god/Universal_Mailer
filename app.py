@@ -1271,6 +1271,8 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200
             where.append("se.opened=FALSE")
         elif filter == "alert_48h":
             where.append("se.alerted_48h=TRUE AND se.replied=FALSE")
+        elif filter == "bounced":
+            where.append("se.alerted_48h=TRUE AND se.opened=FALSE")
         if date_from:
             where.append("DATE(se.sent_at) >= %s")
             params.append(date_from)
@@ -1414,6 +1416,8 @@ async def tracking_download(filter: str = "all", sender: str = "", date_from: st
             where.append("se.opened=FALSE")
         elif filter == "alert_48h":
             where.append("se.alerted_48h=TRUE AND se.replied=FALSE")
+        elif filter == "bounced":
+            where.append("se.alerted_48h=TRUE AND se.opened=FALSE")
         if date_from:
             where.append("DATE(se.sent_at) >= %s")
             params.append(date_from)
