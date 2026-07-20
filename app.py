@@ -217,13 +217,20 @@ def add_log(msg, campaign_id=""):
 
 def is_working_hours():
     now = datetime.now(IST)
+    if now.weekday() == 6:  # Sunday
+        return False
     return 10 <= now.hour < 19  # 10 AM to 7 PM
 
 def secs_until_work():
     now = datetime.now(IST)
     start = now.replace(hour=10, minute=0, second=0, microsecond=0)
+    
     if now >= start:
         start += timedelta(days=1)
+        
+    if start.weekday() == 6:  # Sunday
+        start += timedelta(days=1)
+        
     return max(0, int((start - now).total_seconds()))
 
 def interruptible_sleep(secs, campaign_id):
@@ -486,22 +493,16 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
                 add_log(f"Campaign cancelled/stopped by user.", campaign_id)
                 break
 
-        # Check per-sender daily limit of 300
+        # Check daily limit
         sender_sent_today = get_sender_today_sent(sender_email)
-        if sender_sent_today >= 300:
-            add_log(f"⚠️ [Limit Reached] {sender_email} has reached the daily limit of 300 emails today. Campaign stopped. Please use another ID or wait for next day.", campaign_id)
-            with campaigns_lock:
-                campaigns[campaign_id]["running"] = False
-                campaigns[campaign_id]["paused"] = False
-            break
-
-        # Check global/daily limit
-        if get_today_sent() >= daily_limit:
-            add_log(f"Daily limit reached ({category}). Resuming tomorrow 10 AM.", campaign_id)
+        if sender_sent_today >= daily_limit:
+            add_log(f"⚠️ [Limit Reached] Today's limit of {daily_limit} reached. It will continue tomorrow automatically.", campaign_id)
             with campaigns_lock:
                 campaigns[campaign_id]["paused"] = True
+                
             if interruptible_sleep(secs_until_work() + 5, campaign_id):
                 break
+                
             with campaigns_lock:
                 campaigns[campaign_id]["paused"] = False
             add_log(f"Resuming campaign ({category}) for {sender_email}", campaign_id)
