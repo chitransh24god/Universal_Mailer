@@ -202,14 +202,26 @@ def init_db():
             opened_at TIMESTAMP,
             replied BOOLEAN DEFAULT FALSE,
             replied_at TIMESTAMP,
-            alerted_48h BOOLEAN DEFAULT FALSE
+            alerted_48h BOOLEAN DEFAULT FALSE,
+            bounced BOOLEAN DEFAULT FALSE,
+            bounced_at TIMESTAMP
         );
     """)
-    # 6. Replies
+    # Migrations for sent_emails columns
     try:
         execute_query("ALTER TABLE sent_emails ADD COLUMN campaign_name TEXT DEFAULT '';", silent=True)
     except Exception:
         pass
+    if not check_column_exists("sent_emails", "bounced"):
+        try:
+            execute_query("ALTER TABLE sent_emails ADD COLUMN bounced BOOLEAN DEFAULT FALSE;", silent=True)
+        except Exception:
+            pass
+    if not check_column_exists("sent_emails", "bounced_at"):
+        try:
+            execute_query("ALTER TABLE sent_emails ADD COLUMN bounced_at TIMESTAMP;", silent=True)
+        except Exception:
+            pass
         
     execute_query("""
         CREATE TABLE IF NOT EXISTS replies (

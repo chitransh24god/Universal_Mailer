@@ -2381,7 +2381,7 @@ select.form-control {
                 document.getElementById('tr-48h').textContent     = sum.not_opened_48h || 0;
                 const openRate = total > 0 ? Math.round((opened / total) * 100) : 0;
                 document.getElementById('tr-open-rate').textContent = openRate + '%';
-                const bounced = sum.not_opened_48h || 0;
+                const bounced = (sum.bounced !== undefined) ? sum.bounced : (sum.not_opened_48h || 0);
                 const bounceRate = total > 0 ? Math.round((bounced / total) * 100) : 0;
                 document.getElementById('tr-bounce-rate').textContent = bounceRate + '%';
                 

@@ -676,10 +676,6 @@ def poll_replies():
             sent_rows = execute_query("SELECT message_id, track_token FROM sent_emails WHERE message_id IS NOT NULL AND message_id != '';", fetch="all")
             our_msgs = {r["message_id"].strip("<>"): r["track_token"] for r in sent_rows if r["message_id"]} if sent_rows else {}
             
-            if not our_msgs:
-                mail.logout()
-                continue
-                
             _, select_data = mail.select("INBOX")
             total_emails = int(select_data[0])
             print(f"[IMAP] {sender_email} — Total emails: {total_emails}")
@@ -715,16 +711,32 @@ def poll_replies():
                                 matched_token = our_msgs[rid]
                                 break
                                     
-                        if matched_token:
-                            # Skip mailer-daemon bounces and auto-replies
-                            from_lower = from_email.lower()
-                            is_bounce = any(x in from_lower for x in [
-                                'mailer-daemon', 'noreply', 'no-reply', 'postmaster',
-                                'mail delivery', 'delivery subsystem'
-                            ])
-                            if is_bounce:
-                                continue
+                        from_lower = from_email.lower()
+                        is_bounce = any(x in from_lower for x in [
+                            'mailer-daemon', 'noreply', 'no-reply', 'postmaster',
+                            'mail delivery', 'delivery subsystem'
+                        ]) or "undeliverable" in subject.lower() or "failure notice" in subject.lower()
+                        
+                        if is_bounce:
+                            print(f"[IMAP Bounce] Bounce detected from {from_email} for sender {sender_email}")
+                            if matched_token:
+                                execute_query("UPDATE sent_emails SET bounced=TRUE, bounced_at=COALESCE(bounced_at, NOW()) WHERE track_token=%s;", [matched_token])
+                            else:
+                                try:
+                                    _, body_data = mail.fetch(str(msg_seq), "(RFC822)")
+                                    if body_data and body_data[0] and isinstance(body_data[0], tuple):
+                                        full_msg = _email_lib.message_from_bytes(body_data[0][1])
+                                        body_prev = get_body_preview(full_msg)
+                                        found_emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', body_prev)
+                                        for fe in found_emails:
+                                            fe_clean = fe.strip().lower()
+                                            if fe_clean != sender_email.lower():
+                                                execute_query("UPDATE sent_emails SET bounced=TRUE, bounced_at=COALESCE(bounced_at, NOW()) WHERE sender_email=%s AND LOWER(to_email)=%s;", [sender_email, fe_clean])
+                                except Exception as ex_b:
+                                    print(f"[IMAP Bounce Parser Error] {ex_b}")
+                            continue
 
+                        if matched_token:
                             # Verify if we already have this reply saved
                             dup = execute_query("SELECT COUNT(*) as c FROM replies WHERE track_token = %s AND from_email = %s AND subject = %s;", [matched_token, from_email, subject], fetch="one")
                             if dup and dup["c"] > 0:
@@ -959,7 +971,7 @@ async def get_senders():
         # Batch fetch stats
         sender_stats = execute_query("""
             SELECT sender_email, COUNT(*) as total_sent,
-                   SUM(CASE WHEN alerted_48h=TRUE AND opened=FALSE THEN 1 ELSE 0 END) as total_bounced
+                   SUM(CASE WHEN bounced=TRUE THEN 1 ELSE 0 END) as total_bounced
             FROM sent_emails GROUP BY sender_email;
         """, fetch="all")
         stats_map = {}
@@ -1273,7 +1285,7 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200
         elif filter == "alert_48h":
             where.append("se.alerted_48h=TRUE AND se.replied=FALSE")
         elif filter == "bounced":
-            where.append("se.alerted_48h=TRUE AND se.opened=FALSE")
+            where.append("se.bounced=TRUE")
         if date_from:
             where.append("DATE(se.sent_at) >= %s")
             params.append(date_from)
@@ -1287,7 +1299,7 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200
         rows = execute_query(f"""
             SELECT se.id, se.track_token, se.sender_email, se.to_email,
                    se.company_name, se.owner_name, se.subject, se.sent_at, se.opened, se.opened_at,
-                   se.replied, se.replied_at, se.alerted_48h,
+                   se.replied, se.replied_at, se.alerted_48h, se.bounced, se.bounced_at,
                    (SELECT r.body_preview FROM replies r WHERE r.track_token=se.track_token
                     ORDER BY r.received_at DESC LIMIT 1) AS reply_preview
             FROM sent_emails se {where_clause} ORDER BY se.sent_at DESC LIMIT %s;
@@ -1314,6 +1326,7 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200
             SELECT COUNT(*) AS total,
                    SUM(CASE WHEN opened = TRUE THEN 1 ELSE 0 END) AS opened,
                    SUM(CASE WHEN replied = TRUE THEN 1 ELSE 0 END) AS replied,
+                   SUM(CASE WHEN bounced = TRUE THEN 1 ELSE 0 END) AS bounced,
                    SUM(CASE WHEN opened = FALSE AND alerted_48h = TRUE THEN 1 ELSE 0 END) AS not_opened_48h,
                    SUM(CASE WHEN opened = FALSE AND sent_at > NOW()-INTERVAL '48h' THEN 1 ELSE 0 END) AS pending
             FROM sent_emails {sum_where_clause};
@@ -1325,11 +1338,12 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200
                 "total": summary.get("total") or 0,
                 "opened": summary.get("opened") or 0,
                 "replied": summary.get("replied") or 0,
+                "bounced": summary.get("bounced") or 0,
                 "not_opened_48h": summary.get("not_opened_48h") or 0,
                 "pending": summary.get("pending") or 0
             }
         else:
-            summary = {"total": 0, "opened": 0, "replied": 0, "not_opened_48h": 0, "pending": 0}
+            summary = {"total": 0, "opened": 0, "replied": 0, "bounced": 0, "not_opened_48h": 0, "pending": 0}
             
         result = []
         for r in rows:
@@ -1345,7 +1359,7 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200
 
 @app.get("/tracking-per-sender")
 async def tracking_per_sender(date_from: str = "", date_to: str = "", campaign_name: str = ""):
-    """Returns per-sender breakdown of sent/opened/replied counts."""
+    """Returns per-sender breakdown of sent/opened/replied/bounced counts."""
     try:
         where = []
         params = []
@@ -1364,6 +1378,7 @@ async def tracking_per_sender(date_from: str = "", date_to: str = "", campaign_n
                    COUNT(*) AS total,
                    SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) AS opened,
                    SUM(CASE WHEN replied=TRUE THEN 1 ELSE 0 END) AS replied,
+                   SUM(CASE WHEN bounced=TRUE THEN 1 ELSE 0 END) AS bounced,
                    SUM(CASE WHEN opened=FALSE AND alerted_48h=TRUE THEN 1 ELSE 0 END) AS not_opened_48h
             FROM sent_emails {where_clause}
             GROUP BY sender_email ORDER BY total DESC;
@@ -1374,7 +1389,7 @@ async def tracking_per_sender(date_from: str = "", date_to: str = "", campaign_n
 
 @app.get("/tracking-per-campaign")
 async def tracking_per_campaign(date_from: str = "", date_to: str = ""):
-    """Returns per-campaign breakdown (grouped by subject) of sent/opened/replied counts."""
+    """Returns per-campaign breakdown (grouped by subject) of sent/opened/replied/bounced counts."""
     try:
         where = []
         params = []
@@ -1390,6 +1405,7 @@ async def tracking_per_campaign(date_from: str = "", date_to: str = ""):
                    COUNT(*) AS total,
                    SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) AS opened,
                    SUM(CASE WHEN replied=TRUE THEN 1 ELSE 0 END) AS replied,
+                   SUM(CASE WHEN bounced=TRUE THEN 1 ELSE 0 END) AS bounced,
                    SUM(CASE WHEN opened=FALSE AND alerted_48h=TRUE THEN 1 ELSE 0 END) AS not_opened_48h
             FROM sent_emails {where_clause}
             GROUP BY campaign_name, subject ORDER BY total DESC;
@@ -1418,7 +1434,7 @@ async def tracking_download(filter: str = "all", sender: str = "", date_from: st
         elif filter == "alert_48h":
             where.append("se.alerted_48h=TRUE AND se.replied=FALSE")
         elif filter == "bounced":
-            where.append("se.alerted_48h=TRUE AND se.opened=FALSE")
+            where.append("se.bounced=TRUE")
         if date_from:
             where.append("DATE(se.sent_at) >= %s")
             params.append(date_from)
@@ -1430,7 +1446,7 @@ async def tracking_download(filter: str = "all", sender: str = "", date_from: st
         rows = execute_query(f"""
             SELECT se.sender_email, se.to_email, se.company_name, se.owner_name,
                    se.subject, se.sent_at, se.opened, se.opened_at, se.replied, se.replied_at,
-                   se.alerted_48h,
+                   se.bounced, se.bounced_at, se.alerted_48h,
                    (SELECT r.body_preview FROM replies r WHERE r.track_token=se.track_token
                     ORDER BY r.received_at DESC LIMIT 1) AS reply_preview
             FROM sent_emails se {where_clause} ORDER BY se.sent_at DESC LIMIT 10000;
@@ -1439,7 +1455,7 @@ async def tracking_download(filter: str = "all", sender: str = "", date_from: st
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow(["Sender", "Recipient", "Company", "Owner", "Subject", "Sent At",
-                         "Opened", "Opened At", "Replied", "Replied At", "48h Alert", "Reply Preview"])
+                         "Opened", "Opened At", "Replied", "Replied At", "Bounced", "Bounced At", "48h Alert", "Reply Preview"])
         for r in (rows or []):
             d = dict(r)
             writer.writerow([
@@ -1447,6 +1463,7 @@ async def tracking_download(filter: str = "all", sender: str = "", date_from: st
                 d.get("owner_name", ""), d.get("subject", ""), d.get("sent_at", ""),
                 "Yes" if d.get("opened") else "No", d.get("opened_at", "") or "",
                 "Yes" if d.get("replied") else "No", d.get("replied_at", "") or "",
+                "Yes" if d.get("bounced") else "No", d.get("bounced_at", "") or "",
                 "Yes" if d.get("alerted_48h") else "No", d.get("reply_preview", "") or ""
             ])
 
@@ -1543,7 +1560,7 @@ async def tracking_summary():
                 COUNT(*) AS total_sent,
                 SUM(CASE WHEN opened = TRUE THEN 1 ELSE 0 END) AS total_opened,
                 SUM(CASE WHEN replied = TRUE THEN 1 ELSE 0 END) AS total_replied,
-                SUM(CASE WHEN alerted_48h = TRUE AND opened = FALSE THEN 1 ELSE 0 END) AS total_bounced
+                SUM(CASE WHEN bounced = TRUE THEN 1 ELSE 0 END) AS total_bounced
             FROM sent_emails;
         """, fetch="one")
         if row:
@@ -1585,7 +1602,7 @@ async def activity_chart():
             SELECT DATE(sent_at) as dt, 
                    COUNT(*) as sent, 
                    SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) as opened,
-                   SUM(CASE WHEN alerted_48h=TRUE AND opened=FALSE THEN 1 ELSE 0 END) as bounced
+                   SUM(CASE WHEN bounced=TRUE THEN 1 ELSE 0 END) as bounced
             FROM sent_emails
             WHERE DATE(sent_at) >= %s AND DATE(sent_at) <= %s
             GROUP BY DATE(sent_at)
@@ -1603,6 +1620,34 @@ async def activity_chart():
         return JSONResponse(data)
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/webhooks/brevo")
+async def brevo_webhook(request: Request):
+    """Webhook listener for Brevo hard/soft bounce and delivery events."""
+    try:
+        data = await request.json()
+        event_type = str(data.get("event", "")).lower()
+        email = str(data.get("email", "")).strip().lower()
+        message_id = str(data.get("message-id", "")).strip()
+        
+        if any(b_evt in event_type for b_evt in ["bounce", "invalid", "blocked", "deferred"]):
+            if message_id:
+                execute_query("UPDATE sent_emails SET bounced=TRUE, bounced_at=COALESCE(bounced_at, NOW()) WHERE message_id=%s OR message_id=%s;", [message_id, f"<{message_id}>"])
+            if email:
+                execute_query("UPDATE sent_emails SET bounced=TRUE, bounced_at=COALESCE(bounced_at, NOW()) WHERE LOWER(to_email)=%s;", [email])
+            print(f"[Brevo Webhook] Recorded bounce event '{event_type}' for {email} ({message_id})")
+        return JSONResponse({"status": "ok"})
+    except Exception as e:
+        return JSONResponse({"status": "error", "detail": str(e)}, status_code=400)
+
+@app.get("/api/sync-bounces")
+async def sync_bounces_now():
+    """Manual endpoint to immediately trigger IMAP bounce and reply polling."""
+    try:
+        poll_replies()
+        return JSONResponse({"status": "ok", "message": "IMAP sync complete."})
+    except Exception as e:
+        return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
 
 
 @app.get("/api/campaign-history")
