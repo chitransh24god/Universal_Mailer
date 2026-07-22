@@ -2701,6 +2701,9 @@ select.form-control {
                 const container = document.getElementById('settings-senders-list');
                 container.innerHTML = list.map(s => {
                     const bounceRate = s.all_time_sent > 0 ? ((s.all_time_bounced / s.all_time_sent) * 100).toFixed(1) : '0.0';
+                    const repScore = s.reputation_score !== undefined ? s.reputation_score : (100 - parseFloat(bounceRate)).toFixed(1);
+                    const repHealth = s.reputation_health || (repScore >= 95 ? 'Excellent' : repScore >= 85 ? 'Good' : 'Warning');
+                    const repColor = repScore >= 95 ? '#10b981' : repScore >= 85 ? '#3b82f6' : repScore >= 70 ? '#f59e0b' : '#ef4444';
                     return `
                     <div class="sender-item-card">
                         <div class="sender-item-title">${s.display_name}</div>
@@ -2708,7 +2711,8 @@ select.form-control {
                         <div class="sender-item-meta">
                             <span>Limit: ${s.daily_limit}</span>
                             <span>Delay: ${s.delay_min !== undefined ? s.delay_min : 60}-${s.delay_max !== undefined ? s.delay_max : 120}s</span>
-                            <span style="color: ${bounceRate > 5 ? 'var(--danger)' : 'inherit'}">Bounce: ${bounceRate}%</span>
+                            <span style="color: ${bounceRate > 5 ? 'var(--danger)' : 'inherit'}">Bounce Rate: ${bounceRate}%</span>
+                            <span style="font-weight:600; color: ${repColor}">Reputation: ${repScore}% (${repHealth})</span>
                             <span>Status: ${s.active ? '<span class="text-success">Active</span>' : '<span class="text-danger">Inactive</span>'}</span>
                         </div>
                         <div class="sender-item-actions">

@@ -584,13 +584,26 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
             try:
                 execute_query(
                     """INSERT INTO sent_emails
-                       (track_token, sender_email, to_email, company_name, owner_name, subject, message_id, campaign_name)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING;""",
+                       (track_token, sender_email, to_email, company_name, owner_name, subject, message_id, campaign_name, bounced)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s, FALSE) ON CONFLICT DO NOTHING;""",
                     [track_token, sender_email, customer_email,
                      row_dict.get('Company Name', ''), row_dict.get('Owner Name', ''), subject, msg_id, campaign_name]
                 )
             except Exception as te:
                 print(f"Track save error: {te}")
+        else:
+            with campaigns_lock:
+                campaigns[campaign_id]["current_row"] = index + 1
+            try:
+                execute_query(
+                    """INSERT INTO sent_emails
+                       (track_token, sender_email, to_email, company_name, owner_name, subject, message_id, campaign_name, bounced, bounced_at)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s, TRUE, NOW()) ON CONFLICT DO NOTHING;""",
+                    [track_token, sender_email, customer_email,
+                     row_dict.get('Company Name', ''), row_dict.get('Owner Name', ''), subject, msg_id, campaign_name]
+                )
+            except Exception as te:
+                print(f"Failed email track save error: {te}")
                 
         if index < total - 1:
             delay = random.randint(int(delay_min), int(delay_max))
@@ -987,8 +1000,24 @@ async def get_senders():
             d = dict(r)
             d["sent_today"] = get_sender_today_sent(d["email"])
             st = stats_map.get(d["email"], {"sent": 0, "bounced": 0})
-            d["all_time_sent"] = st["sent"]
-            d["all_time_bounced"] = st["bounced"]
+            sent_cnt = st["sent"]
+            bounced_cnt = st["bounced"]
+            d["all_time_sent"] = sent_cnt
+            d["all_time_bounced"] = bounced_cnt
+            
+            if sent_cnt > 0:
+                rep_pct = max(0.0, round(((sent_cnt - bounced_cnt) / sent_cnt) * 100, 1))
+            else:
+                rep_pct = 100.0
+            d["reputation_score"] = rep_pct
+            if rep_pct >= 95.0:
+                d["reputation_health"] = "Excellent"
+            elif rep_pct >= 85.0:
+                d["reputation_health"] = "Good"
+            elif rep_pct >= 70.0:
+                d["reputation_health"] = "Warning"
+            else:
+                d["reputation_health"] = "Critical"
             result.append(d)
         return JSONResponse(result)
     except Exception as e:
