@@ -903,24 +903,36 @@ async def track_open(token: str):
 
 @app.post("/api/webhooks/brevo")
 async def brevo_webhook(request: Request):
+    """Unified webhook listener for Brevo open, bounce, and delivery events."""
     try:
         body = await request.json()
-        event = body.get("event")
-        msg_id = body.get("message-id") or body.get("messageId")
+        event_type = str(body.get("event", "")).lower()
+        msg_id = body.get("message-id") or body.get("messageId") or ""
+        email = str(body.get("email", "")).strip().lower()
+        msg_id_str = str(msg_id).strip()
         
-        if event == "opened" and msg_id:
+        if event_type == "opened" and msg_id_str:
             # Mark email as opened in database
             execute_query("""
                 UPDATE sent_emails 
                 SET opened=TRUE, opened_at=NOW() 
-                WHERE message_id=%s AND opened=FALSE;
-            """, [msg_id])
-            print(f"[Webhook] Email opened via Brevo webhook: message_id={msg_id}")
+                WHERE (message_id=%s OR message_id=%s) AND opened=FALSE;
+            """, [msg_id_str, f"<{msg_id_str}>"])
+            print(f"[Webhook] Email opened via Brevo webhook: message_id={msg_id_str}")
             
-        return {"status": "success"}
+        elif any(b_evt in event_type for b_evt in ["bounce", "invalid", "blocked", "deferred"]):
+            # Mark email as bounced
+            if msg_id_str:
+                execute_query("UPDATE sent_emails SET bounced=TRUE, bounced_at=COALESCE(bounced_at, NOW()) WHERE message_id=%s OR message_id=%s;", [msg_id_str, f"<{msg_id_str}>"])
+            if email:
+                execute_query("UPDATE sent_emails SET bounced=TRUE, bounced_at=COALESCE(bounced_at, NOW()) WHERE LOWER(to_email)=%s;", [email])
+            print(f"[Webhook] Recorded bounce event '{event_type}' for {email} ({msg_id_str})")
+            
+        return JSONResponse({"status": "ok"})
     except Exception as e:
         print(f"[Webhook Error] {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @app.get("/status")
 async def get_status():
@@ -1650,24 +1662,7 @@ async def activity_chart():
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-@app.post("/api/webhooks/brevo")
-async def brevo_webhook(request: Request):
-    """Webhook listener for Brevo hard/soft bounce and delivery events."""
-    try:
-        data = await request.json()
-        event_type = str(data.get("event", "")).lower()
-        email = str(data.get("email", "")).strip().lower()
-        message_id = str(data.get("message-id", "")).strip()
-        
-        if any(b_evt in event_type for b_evt in ["bounce", "invalid", "blocked", "deferred"]):
-            if message_id:
-                execute_query("UPDATE sent_emails SET bounced=TRUE, bounced_at=COALESCE(bounced_at, NOW()) WHERE message_id=%s OR message_id=%s;", [message_id, f"<{message_id}>"])
-            if email:
-                execute_query("UPDATE sent_emails SET bounced=TRUE, bounced_at=COALESCE(bounced_at, NOW()) WHERE LOWER(to_email)=%s;", [email])
-            print(f"[Brevo Webhook] Recorded bounce event '{event_type}' for {email} ({message_id})")
-        return JSONResponse({"status": "ok"})
-    except Exception as e:
-        return JSONResponse({"status": "error", "detail": str(e)}, status_code=400)
+
 
 @app.get("/api/sync-bounces")
 async def sync_bounces_now():
