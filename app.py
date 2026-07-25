@@ -215,20 +215,49 @@ def add_log(msg, campaign_id=""):
                 if len(campaigns[campaign_id]["log"]) > 100:
                     campaigns[campaign_id]["log"].pop(0)
 
-def is_working_hours():
-    now = datetime.now(IST)
-    if now.weekday() == 6:  # Sunday
-        return False
-    return 10 <= now.hour < 19  # 10 AM to 7 PM
+def get_campaign_schedule(campaign_id=""):
+    tz_str = 'Asia/Kolkata'
+    start_hr = 10
+    end_hr = 19
+    w_days = [0, 1, 2, 3, 4, 5]  # Mon-Sat
+    if campaign_id:
+        with campaigns_lock:
+            if campaign_id in campaigns:
+                st = campaigns[campaign_id]
+                tz_str = st.get('timezone', tz_str)
+                start_hr = st.get('start_hour', start_hr)
+                end_hr = st.get('end_hour', end_hr)
+                try:
+                    wd_str = st.get('working_days', '0,1,2,3,4,5')
+                    w_days = [int(x.strip()) for x in str(wd_str).split(',') if x.strip().isdigit()]
+                except Exception:
+                    pass
+    return tz_str, start_hr, end_hr, w_days
 
-def secs_until_work():
-    now = datetime.now(IST)
-    start = now.replace(hour=10, minute=0, second=0, microsecond=0)
+def is_working_hours(campaign_id=""):
+    tz_str, start_hr, end_hr, w_days = get_campaign_schedule(campaign_id)
+    try:
+        tz = pytz.timezone(tz_str)
+    except Exception:
+        tz = IST
+    now = datetime.now(tz)
+    if now.weekday() not in w_days:
+        return False
+    return start_hr <= now.hour < end_hr
+
+def secs_until_work(campaign_id=""):
+    tz_str, start_hr, end_hr, w_days = get_campaign_schedule(campaign_id)
+    try:
+        tz = pytz.timezone(tz_str)
+    except Exception:
+        tz = IST
+    now = datetime.now(tz)
+    start = now.replace(hour=start_hr, minute=0, second=0, microsecond=0)
     
     if now >= start:
         start += timedelta(days=1)
         
-    if start.weekday() == 6:  # Sunday
+    while start.weekday() not in w_days:
         start += timedelta(days=1)
         
     return max(0, int((start - now).total_seconds()))
@@ -436,7 +465,7 @@ def send_via_custom_smtp(to_email, subject, html_body, plain_body, sender_email,
     return False, f"SMTP send failed. Last error: {last_err}"
 
 # ── Campaign Runner Thread Loop ────────────────────────────────────────────────
-def make_campaign_state(sender_email="", category=""):
+def make_campaign_state(sender_email="", category="", timezone="Asia/Kolkata", start_hour=10, end_hour=19, working_days="0,1,2,3,4,5"):
     return {
         "running": False,
         "paused": False,
@@ -446,10 +475,14 @@ def make_campaign_state(sender_email="", category=""):
         "category": category,
         "sender_email": sender_email,
         "log": [],
-        "started_at": datetime.now(IST).strftime("%H:%M:%S")
+        "started_at": datetime.now(IST).strftime("%H:%M:%S"),
+        "timezone": timezone,
+        "start_hour": int(start_hour),
+        "end_hour": int(end_hour),
+        "working_days": str(working_days)
     }
 
-def run_campaign(df_dict, email_subject, template_text, email_col, sender_email, sender_name, campaign_id, category, base_url="", custom_campaign_name=""):
+def run_campaign(df_dict, email_subject, template_text, email_col, sender_email, sender_name, campaign_id, category, base_url="", custom_campaign_name="", timezone="Asia/Kolkata", start_hour=10, end_hour=19, working_days="0,1,2,3,4,5"):
     import secrets
     df = pd.DataFrame(df_dict)
     if 'Email' in df.columns:
@@ -457,7 +490,14 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
     total = len(df)
     
     with campaigns_lock:
-        campaigns[campaign_id] = make_campaign_state(sender_email=sender_email, category=category)
+        campaigns[campaign_id] = make_campaign_state(
+            sender_email=sender_email, 
+            category=category,
+            timezone=timezone,
+            start_hour=start_hour,
+            end_hour=end_hour,
+            working_days=working_days
+        )
         campaigns[campaign_id]["running"] = True
         campaigns[campaign_id]["total_rows"] = total
         
@@ -500,7 +540,7 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
             with campaigns_lock:
                 campaigns[campaign_id]["paused"] = True
                 
-            if interruptible_sleep(secs_until_work() + 5, campaign_id):
+            if interruptible_sleep(secs_until_work(campaign_id) + 5, campaign_id):
                 break
                 
             with campaigns_lock:
@@ -508,8 +548,8 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
             add_log(f"Resuming campaign ({category}) for {sender_email}", campaign_id)
             
         # Working hours check
-        if not is_working_hours():
-            secs = secs_until_work()
+        if not is_working_hours(campaign_id):
+            secs = secs_until_work(campaign_id)
             add_log(f"Outside working hours ({category}). Sleeping {secs//3600}h {(secs%3600)//60}m.", campaign_id)
             with campaigns_lock:
                 campaigns[campaign_id]["paused"] = True
@@ -517,7 +557,7 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
                 break
             with campaigns_lock:
                 campaigns[campaign_id]["paused"] = False
-            add_log(f"Resuming (10 AM IST reached) for {sender_email} ({category})", campaign_id)
+            add_log(f"Resuming (working hours reached) for {sender_email} ({category})", campaign_id)
             
         customer_email = str(row.get(email_col, row.get('Email', ''))).strip()
         if not customer_email or customer_email.lower() in ('nan', 'none', ''):
@@ -822,7 +862,7 @@ def run_scheduled_campaign_thread(sc_id, sender_email, category, filepath):
         sender_name = sender_details["display_name"] if sender_details else "VSD Finserv"
         
         # Run campaign in background
-        run_campaign(df.to_dict(orient="list"), email_subject, template_text, "Email", sender_email, sender_name, campaign_id, category, base_url, sc.get("campaign_name", ""))
+        run_campaign(df.to_dict(orient="list"), email_subject, template_text, "Email", sender_email, sender_name, campaign_id, category, base_url, sc.get("campaign_name", ""), sc.get("timezone", "Asia/Kolkata"), sc.get("start_hour", 10), sc.get("end_hour", 19), sc.get("working_days", "0,1,2,3,4,5"))
         
         execute_query("UPDATE scheduled_campaigns SET status = 'completed' WHERE id = %s;", [sc_id])
     except Exception as e:
@@ -1714,7 +1754,7 @@ async def diagnose_gmail():
             results[f"{host}:{port} ({label})"] = f"BLOCKED — {e}"
     return JSONResponse(results)
 
-async def _launch_campaign(sender_email, category, file, base_url="", custom_campaign_name=""):
+async def _launch_campaign(sender_email, category, file, base_url="", custom_campaign_name="", timezone="Asia/Kolkata", start_hour=10, end_hour=19, working_days="0,1,2,3,4,5"):
     try:
         row = execute_query("SELECT value FROM global_settings WHERE key='tracking_base_url';", fetch="one")
         if row and row["value"]:
@@ -1757,7 +1797,7 @@ async def _launch_campaign(sender_email, category, file, base_url="", custom_cam
         
         t = threading.Thread(
             target=run_campaign,
-            args=(df.to_dict(orient="list"), email_subject, template_text, "Email", sender_email, sender_name, campaign_id, category, base_url, custom_campaign_name),
+            args=(df.to_dict(orient="list"), email_subject, template_text, "Email", sender_email, sender_name, campaign_id, category, base_url, custom_campaign_name, timezone, start_hour, end_hour, working_days),
             daemon=True
         )
         t.start()
@@ -1767,11 +1807,12 @@ async def _launch_campaign(sender_email, category, file, base_url="", custom_cam
 
 @app.post("/send-emails-public/")
 async def send_emails_public(request: Request, pwd: str = Form(...), sender_email: str = Form(...),
-                             category: str = Form(...), file: UploadFile = File(...), campaign_name: str = Form(None)):
+                             category: str = Form(...), file: UploadFile = File(...), campaign_name: str = Form(None),
+                             timezone: str = Form("Asia/Kolkata"), start_hour: int = Form(10), end_hour: int = Form(19), working_days: str = Form("0,1,2,3,4,5")):
     if pwd != get_dashboard_password():
         return JSONResponse(status_code=403, content={"error": "Unauthorized"})
     base_url = str(request.base_url).rstrip('/')
-    count, err = await _launch_campaign(sender_email, category, file, base_url, campaign_name or "")
+    count, err = await _launch_campaign(sender_email, category, file, base_url, campaign_name or "", timezone, start_hour, end_hour, working_days)
     if err:
         return HTMLResponse(f'<html><head><meta http-equiv="refresh" content="3;url=/?pwd={pwd}"></head>'
                             f'<body style="font-family:sans-serif;background:#f8f9fb;color:#b42318;padding:48px;text-align:center;font-size:15px;">'
@@ -1784,7 +1825,8 @@ async def send_emails_public(request: Request, pwd: str = Form(...), sender_emai
 async def send_emails(request: Request, sender_email: str = Form(...), category: str = Form(...),
                        file: UploadFile = File(...), is_scheduled: str = Form(None),
                        scheduled_date: str = Form(None), scheduled_time: str = Form(None),
-                       campaign_name: str = Form(None)):
+                       campaign_name: str = Form(None), timezone: str = Form("Asia/Kolkata"),
+                       start_hour: int = Form(10), end_hour: int = Form(19), working_days: str = Form("0,1,2,3,4,5")):
     base_url = str(request.base_url).rstrip('/')
     
     if is_scheduled == "true" or is_scheduled is True or is_scheduled == "on":
@@ -1809,8 +1851,8 @@ async def send_emails(request: Request, sender_email: str = Form(...), category:
                 
             # Insert into database
             execute_query(
-                "INSERT INTO scheduled_campaigns (sender_email, category, excel_filename, scheduled_time, campaign_name) VALUES (%s,%s,%s,%s,%s);",
-                [sender_email, category, filename, utc_dt, campaign_name or ""]
+                "INSERT INTO scheduled_campaigns (sender_email, category, excel_filename, scheduled_time, campaign_name, timezone, start_hour, end_hour, working_days) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s);",
+                [sender_email, category, filename, utc_dt, campaign_name or "", timezone, start_hour, end_hour, working_days]
             )
             
             return HTMLResponse(f'<html><head><meta http-equiv="refresh" content="4;url=/"></head>'
@@ -1823,7 +1865,7 @@ async def send_emails(request: Request, sender_email: str = Form(...), category:
             return JSONResponse(status_code=500, content={"status": "error", "message": f"Scheduling failed: {e}"})
             
     # Launch campaign immediately
-    count, err = await _launch_campaign(sender_email, category, file, base_url, campaign_name or "")
+    count, err = await _launch_campaign(sender_email, category, file, base_url, campaign_name or "", timezone, start_hour, end_hour, working_days)
     if err:
         return JSONResponse(status_code=400, content={"status": "error", "message": err})
     return HTMLResponse(f'<html><head><meta http-equiv="refresh" content="3;url=/"></head>'

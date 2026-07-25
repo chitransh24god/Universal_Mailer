@@ -1062,24 +1062,74 @@ select.form-control {
                 <input type="file" name="file" accept=".xlsx,.xls" required class="form-control" style="padding:6px 12px;cursor:pointer;">
               </div>
 
-              <!-- Trigger toggle -->
+              <!-- Advanced Scheduling toggle -->
               <div style="padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;">
-                <label class="check-label">
-                  <input type="checkbox" id="chk-schedule" name="is_scheduled" value="true" onchange="toggleScheduleBlock()">
-                  🕒 Schedule this campaign (set trigger date &amp; time)
+                <label class="check-label" style="font-weight:600;margin-bottom:8px;">
+                  <input type="checkbox" id="chk-advanced-schedule" onchange="toggleAdvancedSchedule()">
+                  ⚙️ Advanced Schedule &amp; Working Hours
                 </label>
 
-                <div id="schedule-block" style="display:none;margin-top:12px;">
+                <div id="advanced-schedule-block" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
+                  
+                  <div class="form-group">
+                    <label class="form-label">Timezone</label>
+                    <select name="timezone" class="form-control">
+                      <option value="Asia/Kolkata">India (IST) - Default</option>
+                      <option value="America/New_York">US Eastern (EST)</option>
+                      <option value="America/Chicago">US Central (CST)</option>
+                      <option value="America/Los_Angeles">US Pacific (PST)</option>
+                      <option value="Europe/London">UK (GMT)</option>
+                      <option value="Europe/Paris">Europe (CET)</option>
+                      <option value="Australia/Sydney">Australia (AEST)</option>
+                      <option value="Asia/Dubai">UAE (GST)</option>
+                    </select>
+                  </div>
+
                   <div class="grid-2" style="gap:10px;">
                     <div class="form-group" style="margin-bottom:0;">
-                      <label class="form-label">Trigger Date</label>
-                      <input type="date" id="sched-date" name="scheduled_date" class="form-control">
+                      <label class="form-label">Daily Start Time (Hour)</label>
+                      <input type="number" name="start_hour" value="10" min="0" max="23" class="form-control" title="0-23 (e.g., 10 for 10 AM)">
                     </div>
                     <div class="form-group" style="margin-bottom:0;">
-                      <label class="form-label">Trigger Time</label>
-                      <input type="time" id="sched-time" name="scheduled_time" class="form-control">
+                      <label class="form-label">Daily End Time (Hour)</label>
+                      <input type="number" name="end_hour" value="19" min="1" max="24" class="form-control" title="1-24 (e.g., 19 for 7 PM)">
                     </div>
                   </div>
+
+                  <div class="form-group" style="margin-top:12px;margin-bottom:0;">
+                    <label class="form-label">Working Days</label>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                      <label style="font-size:12px;"><input type="checkbox" name="working_days_chk" value="0" checked> Mon</label>
+                      <label style="font-size:12px;"><input type="checkbox" name="working_days_chk" value="1" checked> Tue</label>
+                      <label style="font-size:12px;"><input type="checkbox" name="working_days_chk" value="2" checked> Wed</label>
+                      <label style="font-size:12px;"><input type="checkbox" name="working_days_chk" value="3" checked> Thu</label>
+                      <label style="font-size:12px;"><input type="checkbox" name="working_days_chk" value="4" checked> Fri</label>
+                      <label style="font-size:12px;"><input type="checkbox" name="working_days_chk" value="5" checked> Sat</label>
+                      <label style="font-size:12px;"><input type="checkbox" name="working_days_chk" value="6"> Sun</label>
+                      <input type="hidden" name="working_days" id="working_days_val" value="0,1,2,3,4,5">
+                    </div>
+                  </div>
+
+                  <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+                    <label class="check-label">
+                      <input type="checkbox" id="chk-schedule" name="is_scheduled" value="true" onchange="toggleScheduleBlock()">
+                      🕒 <strong>Delay Start: Schedule for later</strong>
+                    </label>
+
+                    <div id="schedule-block" style="display:none;margin-top:12px;">
+                      <div class="grid-2" style="gap:10px;">
+                        <div class="form-group" style="margin-bottom:0;">
+                          <label class="form-label">Start Date</label>
+                          <input type="date" id="sched-date" name="scheduled_date" class="form-control">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                          <label class="form-label">Start Time</label>
+                          <input type="time" id="sched-time" name="scheduled_time" class="form-control">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               </div>
 
@@ -1097,7 +1147,7 @@ select.form-control {
                 <div class="card-title">📋 Campaign Rules</div>
               </div>
               <table class="rules-table">
-                <tr><td>Working Hours</td><td>10:00 AM – 7:00 PM IST</td></tr>
+                <tr><td>Working Hours</td><td>Customizable (Default: 10:00 AM – 7:00 PM IST)</td></tr>
                 <tr><td>Send Delay</td><td>60–120 seconds between emails</td></tr>
                 <tr><td>Daily Limit</td><td>300 emails per sender account</td></tr>
                 <tr><td>Auto-Resume</td><td>Next day 10 AM if limit reached</td></tr>
@@ -3005,6 +3055,22 @@ select.form-control {
         }
 
         // ── CAMPAIGN SCHEDULING ───────────────────────────
+        function toggleAdvancedSchedule() {
+            const chk = document.getElementById('chk-advanced-schedule');
+            const block = document.getElementById('advanced-schedule-block');
+            if(chk && block) {
+                block.style.display = chk.checked ? 'block' : 'none';
+            }
+        }
+        
+        // Update hidden working days input when checkboxes change
+        document.addEventListener('change', function(e) {
+            if (e.target && e.target.name === 'working_days_chk') {
+                const checkboxes = document.querySelectorAll('input[name="working_days_chk"]:checked');
+                const values = Array.from(checkboxes).map(cb => cb.value);
+                document.getElementById('working_days_val').value = values.join(',');
+            }
+        });
         function toggleScheduleBlock() {
             const chk = document.getElementById('chk-schedule');
             const block = document.getElementById('schedule-block');

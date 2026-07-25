@@ -263,9 +263,23 @@ def init_db():
             excel_filename TEXT NOT NULL,
             scheduled_time TIMESTAMP NOT NULL,
             status TEXT DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            timezone TEXT DEFAULT 'Asia/Kolkata',
+            start_hour INTEGER DEFAULT 10,
+            end_hour INTEGER DEFAULT 19,
+            working_days TEXT DEFAULT '0,1,2,3,4,5'
         );
     """)
+    
+    # Migrations for scheduled_campaigns
+    if not check_column_exists("scheduled_campaigns", "timezone"):
+        try:
+            execute_query("ALTER TABLE scheduled_campaigns ADD COLUMN timezone TEXT DEFAULT 'Asia/Kolkata';", silent=True)
+            execute_query("ALTER TABLE scheduled_campaigns ADD COLUMN start_hour INTEGER DEFAULT 10;", silent=True)
+            execute_query("ALTER TABLE scheduled_campaigns ADD COLUMN end_hour INTEGER DEFAULT 19;", silent=True)
+            execute_query("ALTER TABLE scheduled_campaigns ADD COLUMN working_days TEXT DEFAULT '0,1,2,3,4,5';", silent=True)
+        except Exception:
+            pass
 
     
     seed_defaults()
