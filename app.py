@@ -5,6 +5,8 @@ import random
 import re
 import smtplib
 import socket
+import dns.resolver
+import requests
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, date, timedelta
@@ -252,15 +254,65 @@ def secs_until_work(campaign_id=""):
     except Exception:
         tz = IST
     now = datetime.now(tz)
-    start = now.replace(hour=start_hr, minute=0, second=0, microsecond=0)
     
-    if now >= start:
-        start += timedelta(days=1)
+    if now.weekday() not in w_days:
+        for i in range(1, 8):
+            next_day = now + timedelta(days=i)
+            if next_day.weekday() in w_days:
+                target = next_day.replace(hour=start_hr, minute=0, second=0, microsecond=0)
+                return max(0, int((target - now).total_seconds()))
+        return 86400
         
-    while start.weekday() not in w_days:
-        start += timedelta(days=1)
+    if now.hour < start_hr:
+        target = now.replace(hour=start_hr, minute=0, second=0, microsecond=0)
+        return max(0, int((target - now).total_seconds()))
+    if now.hour >= end_hr:
+        target = (now + timedelta(days=1)).replace(hour=start_hr, minute=0, second=0, microsecond=0)
+        while target.weekday() not in w_days:
+            target += timedelta(days=1)
+        return max(0, int((target - now).total_seconds()))
+    return 0
+
+def check_domain_mx(email):
+    """Check if the email domain has valid MX records. Returns True if valid, False if guaranteed bounce."""
+    try:
+        domain = email.split('@')[-1]
+        answers = dns.resolver.resolve(domain, 'MX')
+        return len(answers) > 0
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers, dns.exception.Timeout):
+        return False
+    except Exception:
+        return True # Default to True on unknown errors to avoid false positives
+
+def auto_register_webhooks():
+    try:
+        base_url = execute_query("SELECT value FROM global_settings WHERE key='tracking_base_url';", fetch="one")
+        base_url = base_url["value"].strip().rstrip('/') if base_url and base_url["value"] else os.environ.get("TRACKING_BASE_URL", "").rstrip('/')
+        if not base_url or 'localhost' in base_url or '127.0.0.1' in base_url:
+            return
+            
+        webhook_url = f"{base_url}/api/webhooks/brevo"
+        senders = execute_query("SELECT api_key FROM sender_accounts WHERE provider_type='brevo' AND api_key IS NOT NULL AND api_key != '';", fetch="all")
         
-    return max(0, int((start - now).total_seconds()))
+        for s in (senders or []):
+            api_key = s["api_key"]
+            try:
+                resp = requests.get("https://api.brevo.com/v3/webhooks", headers={"accept": "application/json", "api-key": api_key}, timeout=10)
+                if resp.status_code == 200:
+                    exists = any(wh.get("url") == webhook_url for wh in resp.json().get("webhooks", []))
+                    if exists:
+                        continue
+                payload = {
+                    "url": webhook_url,
+                    "description": "Universal Mailer Webhook",
+                    "events": ["hardBounce", "softBounce", "blocked", "spam", "invalid", "deferred", "opened", "click"],
+                    "type": "transactional"
+                }
+                requests.post("https://api.brevo.com/v3/webhooks", json=payload, headers={"accept": "application/json", "content-type": "application/json", "api-key": api_key}, timeout=10)
+            except Exception as e:
+                print(f"[Webhook auto-register error] {e}")
+    except Exception as e:
+        print(f"[Webhook setup error] {e}")
 
 def interruptible_sleep(secs, campaign_id):
     for _ in range(int(secs)):
@@ -570,6 +622,24 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
         success = False
         msg_id = ""
         
+        # 1. Synchronous Domain MX Check to immediately catch non-existent domains (Bounces)
+        if not check_domain_mx(customer_email):
+            add_log(f"[{index+1}/{total}] BOUNCED {customer_email} ({category}): Invalid Domain (No MX Records)", campaign_id)
+            try:
+                execute_query(
+                    """INSERT INTO sent_emails
+                       (track_token, sender_email, to_email, company_name, owner_name, subject, message_id, campaign_name, bounced, bounced_at)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s, TRUE, NOW()) ON CONFLICT DO NOTHING;""",
+                    [track_token, sender_email, customer_email,
+                     row_dict.get('Company Name', ''), row_dict.get('Owner Name', ''), subject, "mx-failed", campaign_name]
+                )
+            except Exception as e:
+                pass
+            with campaigns_lock:
+                campaigns[campaign_id]["current_row"] = index + 1
+            continue # Skip to next email
+        
+        # 2. Proceed with sending
         if provider_type == "smtp":
             success, result = send_via_custom_smtp(
                 to_email=customer_email, subject=subject,
@@ -927,6 +997,7 @@ def background_tracker():
 async def startup():
     init_db()
     threading.Thread(target=background_tracker, daemon=True).start()
+    threading.Thread(target=auto_register_webhooks, daemon=True).start()
     print("[Tracker] Background thread started")
 
 # ── API ROUTES ────────────────────────────────────────────────────────────────
