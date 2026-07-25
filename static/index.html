@@ -1422,12 +1422,9 @@ select.form-control {
               <button id="tr-btn-bounced" class="btn btn-secondary btn-sm" onclick="loadTracking('bounced')">Bounced</button>
             </div>
             <div class="flex-row flex-wrap gap-8">
-              <div class="custom-dropdown-container" style="position: relative;">
-                <input type="text" id="track-campaign-filter" class="form-control" placeholder="Search or select campaign..." 
-                       onfocus="showCampaignDropdown()" oninput="filterCampaignDropdown()" autocomplete="off" style="padding-right: 30px; cursor: pointer;">
-                <span style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #64748b; font-size: 10px;">▼</span>
-                <div id="campaign-dropdown" class="custom-dropdown-content"></div>
-              </div>
+              <select id="track-campaign-filter" style="width: 200px;" placeholder="Search Campaigns...">
+                <option value="">All Campaigns</option>
+              </select>
               <input type="date" id="track-date-from" class="form-control text-sm">
               <input type="date" id="track-date-to"   class="form-control text-sm">
               <select id="tr-sender-filter" class="form-control" style="width:200px;"></select>
@@ -3274,55 +3271,34 @@ select.form-control {
             });
         }
 
-        // Custom Searchable Dropdown Logic
-        document.addEventListener('click', function(event) {
-            const container = document.querySelector('.custom-dropdown-container');
-            const dropdown = document.getElementById('campaign-dropdown');
-            if (container && dropdown && !container.contains(event.target)) {
-                dropdown.style.display = 'none';
-            }
-        });
-
-        function showCampaignDropdown() {
-            document.getElementById('campaign-dropdown').style.display = 'block';
-        }
-        function filterCampaignDropdown() {
-            const filter = document.getElementById('track-campaign-filter').value.toUpperCase();
-            const div = document.getElementById('campaign-dropdown');
-            const items = div.getElementsByClassName('custom-dropdown-item');
-            for (let i = 0; i < items.length; i++) {
-                let txtValue = items[i].textContent || items[i].innerText;
-                if (txtValue.toUpperCase().indexOf(filter) > -1) {
-                    items[i].style.display = "";
-                } else {
-                    items[i].style.display = "none";
-                }
-            }
-        }
-        function selectCampaignFilter(val) {
-            document.getElementById('track-campaign-filter').value = val;
-            document.getElementById('campaign-dropdown').style.display = 'none';
-            applyFilters();
-        }
+        let campaignSelectInstance = null;
 
         async function populateCampaignDropdown() {
             try {
                 const resp = await fetch('/tracking-per-campaign');
                 const rows = await resp.json();
-                const dropdown = document.getElementById('campaign-dropdown');
-                if (!dropdown) return;
+                const sel = document.getElementById('track-campaign-filter');
+                if (!sel) return;
                 
-                dropdown.innerHTML = '<div class="custom-dropdown-item" onclick="selectCampaignFilter(\'\')"><strong>All Campaigns</strong></div>';
+                if (!campaignSelectInstance) {
+                    campaignSelectInstance = new TomSelect('#track-campaign-filter', {
+                        create: false,
+                        sortField: { field: "text", direction: "asc" },
+                        placeholder: 'Search Campaigns...',
+                        onChange: function() { applyFilters(); }
+                    });
+                }
+                
+                campaignSelectInstance.clearOptions();
+                campaignSelectInstance.addOption({value: '', text: 'All Campaigns'});
                 
                 const allCampaigns = rows.map(r => r.campaign_name).filter(c => c);
                 const uniqueCampaigns = [...new Set(allCampaigns)];
                 uniqueCampaigns.forEach(c => {
-                    const div = document.createElement('div');
-                    div.className = 'custom-dropdown-item';
-                    div.textContent = c;
-                    div.onclick = function() { selectCampaignFilter(c); };
-                    dropdown.appendChild(div);
+                    campaignSelectInstance.addOption({value: c, text: c});
                 });
+                
+                campaignSelectInstance.refreshOptions(false);
             } catch (e) {
                 console.error("Error populating campaigns dropdown", e);
             }
