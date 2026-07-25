@@ -1422,9 +1422,10 @@ select.form-control {
               <button id="tr-btn-bounced" class="btn btn-secondary btn-sm" onclick="loadTracking('bounced')">Bounced</button>
             </div>
             <div class="flex-row flex-wrap gap-8">
-              <div class="custom-dropdown-container">
+              <div class="custom-dropdown-container" style="position: relative;">
                 <input type="text" id="track-campaign-filter" class="form-control" placeholder="Search or select campaign..." 
-                       onfocus="showCampaignDropdown()" onblur="hideCampaignDropdown()" oninput="filterCampaignDropdown()" autocomplete="off">
+                       onfocus="showCampaignDropdown()" oninput="filterCampaignDropdown()" autocomplete="off" style="padding-right: 30px; cursor: pointer;">
+                <span style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #64748b; font-size: 10px;">▼</span>
                 <div id="campaign-dropdown" class="custom-dropdown-content"></div>
               </div>
               <input type="date" id="track-date-from" class="form-control text-sm">
@@ -3274,11 +3275,16 @@ select.form-control {
         }
 
         // Custom Searchable Dropdown Logic
+        document.addEventListener('click', function(event) {
+            const container = document.querySelector('.custom-dropdown-container');
+            const dropdown = document.getElementById('campaign-dropdown');
+            if (container && dropdown && !container.contains(event.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+
         function showCampaignDropdown() {
             document.getElementById('campaign-dropdown').style.display = 'block';
-        }
-        function hideCampaignDropdown() {
-            setTimeout(() => { document.getElementById('campaign-dropdown').style.display = 'none'; }, 200);
         }
         function filterCampaignDropdown() {
             const filter = document.getElementById('track-campaign-filter').value.toUpperCase();
