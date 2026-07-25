@@ -1,1 +1,9 @@
-﻿慦瑳灡੩癵捩牯੮獰捹灯㉧戭湩牡੹慰摮獡漊数灮硹੬敲畱獥獴瀊瑹੺祰桴湯洭汵楴慰瑲搊渀猀瀀礀琀栀漀渀ഀ਀
+﻿fastapi
+uvicorn
+psycopg2-binary
+pandas
+openpyxl
+requests
+pytz
+python-multipart
+dnspython
