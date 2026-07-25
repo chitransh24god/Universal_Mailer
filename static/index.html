@@ -1422,9 +1422,11 @@ select.form-control {
               <button id="tr-btn-bounced" class="btn btn-secondary btn-sm" onclick="loadTracking('bounced')">Bounced</button>
             </div>
             <div class="flex-row flex-wrap gap-8">
-              <input list="campaign-list-options" id="track-campaign-filter" class="form-control" style="width: 200px;" placeholder="Search Campaigns..." onchange="applyFilters()">
-              <datalist id="campaign-list-options">
-              </datalist>
+              <div class="custom-dropdown-container">
+                <input type="text" id="track-campaign-filter" class="form-control" placeholder="Search or select campaign..." 
+                       onfocus="showCampaignDropdown()" onblur="hideCampaignDropdown()" oninput="filterCampaignDropdown()" autocomplete="off">
+                <div id="campaign-dropdown" class="custom-dropdown-content"></div>
+              </div>
               <input type="date" id="track-date-from" class="form-control text-sm">
               <input type="date" id="track-date-to"   class="form-control text-sm">
               <select id="tr-sender-filter" class="form-control" style="width:200px;"></select>
@@ -3271,21 +3273,49 @@ select.form-control {
             });
         }
 
+        // Custom Searchable Dropdown Logic
+        function showCampaignDropdown() {
+            document.getElementById('campaign-dropdown').style.display = 'block';
+        }
+        function hideCampaignDropdown() {
+            setTimeout(() => { document.getElementById('campaign-dropdown').style.display = 'none'; }, 200);
+        }
+        function filterCampaignDropdown() {
+            const filter = document.getElementById('track-campaign-filter').value.toUpperCase();
+            const div = document.getElementById('campaign-dropdown');
+            const items = div.getElementsByClassName('custom-dropdown-item');
+            for (let i = 0; i < items.length; i++) {
+                let txtValue = items[i].textContent || items[i].innerText;
+                if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                    items[i].style.display = "";
+                } else {
+                    items[i].style.display = "none";
+                }
+            }
+        }
+        function selectCampaignFilter(val) {
+            document.getElementById('track-campaign-filter').value = val;
+            document.getElementById('campaign-dropdown').style.display = 'none';
+            applyFilters();
+        }
+
         async function populateCampaignDropdown() {
             try {
                 const resp = await fetch('/tracking-per-campaign');
                 const rows = await resp.json();
-                const sel = document.getElementById('campaign-list-options');
-                if (!sel) return;
+                const dropdown = document.getElementById('campaign-dropdown');
+                if (!dropdown) return;
                 
-                sel.innerHTML = '';
+                dropdown.innerHTML = '<div class="custom-dropdown-item" onclick="selectCampaignFilter(\'\')"><strong>All Campaigns</strong></div>';
                 
                 const allCampaigns = rows.map(r => r.campaign_name).filter(c => c);
                 const uniqueCampaigns = [...new Set(allCampaigns)];
                 uniqueCampaigns.forEach(c => {
-                    const opt = document.createElement('option');
-                    opt.value = c;
-                    sel.appendChild(opt);
+                    const div = document.createElement('div');
+                    div.className = 'custom-dropdown-item';
+                    div.textContent = c;
+                    div.onclick = function() { selectCampaignFilter(c); };
+                    dropdown.appendChild(div);
                 });
             } catch (e) {
                 console.error("Error populating campaigns dropdown", e);
