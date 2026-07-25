@@ -248,11 +248,29 @@ def is_working_hours(campaign_id=""):
     except Exception:
         tz = IST
     now = datetime.now(tz)
-    if now.weekday() not in w_days:
+    
+    in_time_window = False
+    if start_hr < end_hr:
+        in_time_window = start_hr <= now.hour < end_hr
+    else:
+        in_time_window = now.hour >= start_hr or now.hour < end_hr
+        
+    if not in_time_window:
         return False
-    return start_hr <= now.hour < end_hr
+        
+    check_day = now
+    if start_hr >= end_hr and now.hour < end_hr:
+        check_day = now - timedelta(days=1)
+        
+    if check_day.weekday() not in w_days:
+        return False
+        
+    return True
 
 def secs_until_work(campaign_id=""):
+    if is_working_hours(campaign_id):
+        return 0
+        
     tz_str, start_hr, end_hr, w_days = get_campaign_schedule(campaign_id)
     if w_days == "IGNORE":
         return 0
@@ -262,23 +280,14 @@ def secs_until_work(campaign_id=""):
         tz = IST
     now = datetime.now(tz)
     
-    if now.weekday() not in w_days:
-        for i in range(1, 8):
-            next_day = now + timedelta(days=i)
-            if next_day.weekday() in w_days:
-                target = next_day.replace(hour=start_hr, minute=0, second=0, microsecond=0)
-                return max(0, int((target - now).total_seconds()))
-        return 86400
+    target = now.replace(hour=start_hr, minute=0, second=0, microsecond=0)
+    if now.hour >= start_hr:
+        target += timedelta(days=1)
         
-    if now.hour < start_hr:
-        target = now.replace(hour=start_hr, minute=0, second=0, microsecond=0)
-        return max(0, int((target - now).total_seconds()))
-    if now.hour >= end_hr:
-        target = (now + timedelta(days=1)).replace(hour=start_hr, minute=0, second=0, microsecond=0)
-        while target.weekday() not in w_days:
-            target += timedelta(days=1)
-        return max(0, int((target - now).total_seconds()))
-    return 0
+    while target.weekday() not in w_days:
+        target += timedelta(days=1)
+        
+    return max(0, int((target - now).total_seconds()))
 
 def check_domain_mx(email):
     """Check if the email domain has valid MX records. Returns True if valid, False if guaranteed bounce."""
