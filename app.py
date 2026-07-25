@@ -534,7 +534,7 @@ def make_campaign_state(sender_email="", category="", timezone="Asia/Kolkata", s
         "working_days": str(working_days)
     }
 
-def run_campaign(df_dict, email_subject, template_text, email_col, sender_email, sender_name, campaign_id, category, base_url="", custom_campaign_name="", timezone="Asia/Kolkata", start_hour=10, end_hour=19, working_days="0,1,2,3,4,5"):
+def run_campaign(df_dict, email_subject, template_text, email_col, sender_email, sender_name, campaign_id, category, base_url="", custom_campaign_name="", timezone="Asia/Kolkata", start_hour=10, end_hour=19, working_days="0,1,2,3,4,5", start_row=0):
     import secrets
     df = pd.DataFrame(df_dict)
     if 'Email' in df.columns:
@@ -552,6 +552,18 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
         )
         campaigns[campaign_id]["running"] = True
         campaigns[campaign_id]["total_rows"] = total
+        campaigns[campaign_id]["current_row"] = start_row
+        
+    import json
+    try:
+        df_json = json.dumps(df_dict)
+        execute_query("""
+            INSERT INTO active_campaigns (campaign_id, sender_email, sender_name, category, email_subject, template_text, email_col, base_url, custom_campaign_name, timezone, start_hour, end_hour, working_days, df_dict, current_row, status)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'running')
+            ON CONFLICT (campaign_id) DO UPDATE SET status='running';
+        """, [campaign_id, sender_email, sender_name, category, email_subject, template_text, email_col, base_url, custom_campaign_name, timezone, start_hour, end_hour, working_days, df_json, start_row])
+    except Exception as e:
+        print(f"Active campaign save error: {e}")
         
     campaign_name = custom_campaign_name if custom_campaign_name else f"{sender_email} - {datetime.now(IST).strftime('%d %b %Y, %I:%M %p')}"
         
@@ -579,6 +591,9 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
     delay_min = sender_config.get("delay_min") if sender_config.get("delay_min") is not None else DELAY_MIN_SECS
     delay_max = sender_config.get("delay_max") if sender_config.get("delay_max") is not None else DELAY_MAX_SECS
     for index, row in df.iterrows():
+        if index < start_row:
+            continue
+            
         # Check if campaign was cancelled
         with campaigns_lock:
             if campaign_id in campaigns and campaigns[campaign_id].get("cancelled"):
@@ -715,6 +730,11 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
             except Exception as te:
                 print(f"Failed email track save error: {te}")
                 
+        try:
+            execute_query("UPDATE active_campaigns SET current_row=%s WHERE campaign_id=%s;", [index + 1, campaign_id])
+        except Exception:
+            pass
+                
         if index < total - 1:
             delay = random.randint(int(delay_min), int(delay_max))
             if interruptible_sleep(delay, campaign_id):
@@ -729,7 +749,13 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
         add_log(f"Campaign completed for {sender_email} ({category})!", campaign_id)
         
     with campaigns_lock:
-        campaigns[campaign_id]["running"] = False
+        if campaign_id in campaigns:
+            campaigns[campaign_id]["running"] = False
+            
+    try:
+        execute_query("DELETE FROM active_campaigns WHERE campaign_id=%s;", [campaign_id])
+    except Exception as e:
+        print(f"Failed to delete active campaign: {e}")
 
 # ── IMAP Poller Background Tracker ─────────────────────────────────────────────
 def poll_replies():
@@ -1037,7 +1063,41 @@ async def startup():
     init_db()
     threading.Thread(target=background_tracker, daemon=True).start()
     threading.Thread(target=auto_register_webhooks, daemon=True).start()
+    threading.Thread(target=auto_resume_campaigns, daemon=True).start()
+    threading.Thread(target=keep_alive_pinger, daemon=True).start()
     print("[Tracker] Background thread started")
+
+def auto_resume_campaigns():
+    import json
+    try:
+        active_camps = execute_query("SELECT * FROM active_campaigns WHERE status IN ('running', 'paused');", fetch="all")
+        if not active_camps: return
+        print(f"[Auto-Resume] Found {len(active_camps)} unfinished campaigns. Resuming...")
+        for c in active_camps:
+            df_dict = json.loads(c["df_dict"])
+            threading.Thread(target=run_campaign, args=(
+                df_dict, c["email_subject"], c["template_text"], c["email_col"],
+                c["sender_email"], c["sender_name"], c["campaign_id"], c["category"]
+            ), kwargs={
+                "base_url": c["base_url"], "custom_campaign_name": c["custom_campaign_name"],
+                "timezone": c["timezone"], "start_hour": c["start_hour"], "end_hour": c["end_hour"],
+                "working_days": c["working_days"], "start_row": c["current_row"]
+            }, daemon=True).start()
+    except Exception as e:
+        print(f"[Auto-Resume Error] {e}")
+
+def keep_alive_pinger():
+    import requests
+    while True:
+        try:
+            time.sleep(600) # Ping every 10 mins
+            row = execute_query("SELECT value FROM global_settings WHERE key='tracking_base_url';", fetch="one")
+            if row and row["value"]:
+                base = row["value"].strip().rstrip('/')
+                if base and not 'localhost' in base:
+                    requests.get(f"{base}/api/settings", timeout=10)
+        except Exception:
+            pass
 
 # ── API ROUTES ────────────────────────────────────────────────────────────────
 @app.get("/track/{token}")

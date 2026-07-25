@@ -282,7 +282,29 @@ def init_db():
             working_days TEXT DEFAULT '0,1,2,3,4,5'
         );
     """)
-    
+
+    # 10. Active Campaigns (Auto-Resume)
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS active_campaigns (
+            campaign_id TEXT PRIMARY KEY,
+            sender_email TEXT,
+            sender_name TEXT,
+            category TEXT,
+            email_subject TEXT,
+            template_text TEXT,
+            email_col TEXT,
+            base_url TEXT,
+            custom_campaign_name TEXT,
+            timezone TEXT,
+            start_hour INTEGER,
+            end_hour INTEGER,
+            working_days TEXT,
+            df_dict TEXT,
+            current_row INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'running',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
     # Migrations for scheduled_campaigns
     if not check_column_exists("scheduled_campaigns", "timezone"):
         try:
