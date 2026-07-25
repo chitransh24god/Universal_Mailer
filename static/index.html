@@ -1422,9 +1422,9 @@ select.form-control {
               <button id="tr-btn-bounced" class="btn btn-secondary btn-sm" onclick="loadTracking('bounced')">Bounced</button>
             </div>
             <div class="flex-row flex-wrap gap-8">
-              <select id="track-campaign-filter" class="form-control" style="width: 180px;" onchange="applyFilters()">
-                <option value="">All Campaigns</option>
-              </select>
+              <input list="campaign-list-options" id="track-campaign-filter" class="form-control" style="width: 200px;" placeholder="Search Campaigns..." onchange="applyFilters()">
+              <datalist id="campaign-list-options">
+              </datalist>
               <input type="date" id="track-date-from" class="form-control text-sm">
               <input type="date" id="track-date-to"   class="form-control text-sm">
               <select id="tr-sender-filter" class="form-control" style="width:200px;"></select>
@@ -3275,24 +3275,18 @@ select.form-control {
             try {
                 const resp = await fetch('/tracking-per-campaign');
                 const rows = await resp.json();
-                const sel = document.getElementById('track-campaign-filter');
+                const sel = document.getElementById('campaign-list-options');
                 if (!sel) return;
                 
-                // Keep the 'All Campaigns' option
-                const currentVal = sel.value;
-                sel.innerHTML = '<option value="">All Campaigns</option>';
+                sel.innerHTML = '';
                 
                 const allCampaigns = rows.map(r => r.campaign_name).filter(c => c);
                 const uniqueCampaigns = [...new Set(allCampaigns)];
                 uniqueCampaigns.forEach(c => {
                     const opt = document.createElement('option');
                     opt.value = c;
-                    opt.textContent = c;
                     sel.appendChild(opt);
                 });
-                if (uniqueCampaigns.includes(currentVal)) {
-                    sel.value = currentVal;
-                }
             } catch (e) {
                 console.error("Error populating campaigns dropdown", e);
             }
