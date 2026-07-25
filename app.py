@@ -842,21 +842,60 @@ def poll_replies():
                         
                         if is_bounce:
                             print(f"[IMAP Bounce] Bounce detected from {from_email} for sender {sender_email}")
-                            if matched_token:
-                                execute_query("UPDATE sent_emails SET bounced=TRUE, bounced_at=COALESCE(bounced_at, NOW()) WHERE track_token=%s;", [matched_token])
-                            else:
-                                try:
-                                    _, body_data = mail.fetch(str(msg_seq), "(RFC822)")
-                                    if body_data and body_data[0] and isinstance(body_data[0], tuple):
-                                        full_msg = _email_lib.message_from_bytes(body_data[0][1])
+                            try:
+                                _, body_data = mail.fetch(str(msg_seq), "(RFC822)")
+                                if body_data and body_data[0] and isinstance(body_data[0], tuple):
+                                    full_msg = _email_lib.message_from_bytes(body_data[0][1])
+                                    
+                                    bounced_email = None
+                                    diagnostic_code = "Unknown SMTP Error"
+                                    action = "failed"
+                                    
+                                    # 1. Try formal DSN parsing
+                                    for part in full_msg.walk():
+                                        if part.get_content_type() == "message/delivery-status":
+                                            dsn_payload = part.get_payload()
+                                            if isinstance(dsn_payload, list):
+                                                for dsn_part in dsn_payload:
+                                                    for k, v in dsn_part.items():
+                                                        k_lower = k.lower()
+                                                        if k_lower == "final-recipient" and "rfc822;" in v.lower():
+                                                            bounced_email = v.split(";", 1)[1].strip()
+                                                        elif k_lower == "diagnostic-code":
+                                                            diagnostic_code = v.strip()
+                                                        elif k_lower == "action":
+                                                            action = v.strip().lower()
+                                            else:
+                                                dsn_text = str(dsn_payload)
+                                                frec = re.search(r'Final-Recipient: rfc822;\s*(.+)', dsn_text, re.IGNORECASE)
+                                                dcode = re.search(r'Diagnostic-Code:\s*(.+)', dsn_text, re.IGNORECASE)
+                                                act = re.search(r'Action:\s*(.+)', dsn_text, re.IGNORECASE)
+                                                if frec: bounced_email = frec.group(1).strip()
+                                                if dcode: diagnostic_code = dcode.group(1).strip()
+                                                if act: action = act.group(1).strip().lower()
+                                    
+                                    # 2. Fallback to regex on body if no DSN found
+                                    if not bounced_email:
                                         body_prev = get_body_preview(full_msg)
+                                        dcode = re.search(r'Diagnostic-Code:\s*(.+)', body_prev, re.IGNORECASE)
+                                        if dcode: diagnostic_code = dcode.group(1).strip()
+                                        
                                         found_emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', body_prev)
                                         for fe in found_emails:
                                             fe_clean = fe.strip().lower()
                                             if fe_clean != sender_email.lower():
-                                                execute_query("UPDATE sent_emails SET bounced=TRUE, bounced_at=COALESCE(bounced_at, NOW()) WHERE sender_email=%s AND LOWER(to_email)=%s;", [sender_email, fe_clean])
-                                except Exception as ex_b:
-                                    print(f"[IMAP Bounce Parser Error] {ex_b}")
+                                                bounced_email = fe_clean
+                                                break
+                                    
+                                    if action == "failed" and bounced_email:
+                                        if matched_token:
+                                            execute_query("UPDATE sent_emails SET bounced=TRUE, bounced_at=COALESCE(bounced_at, NOW()), bounce_reason='Bounced (IMAP)', smtp_response=%s WHERE track_token=%s;", [diagnostic_code, matched_token])
+                                        else:
+                                            execute_query("UPDATE sent_emails SET bounced=TRUE, bounced_at=COALESCE(bounced_at, NOW()), bounce_reason='Bounced (IMAP)', smtp_response=%s WHERE sender_email=%s AND LOWER(to_email)=%s;", [diagnostic_code, sender_email, bounced_email])
+                                    elif matched_token:
+                                        execute_query("UPDATE sent_emails SET bounced=TRUE, bounced_at=COALESCE(bounced_at, NOW()), bounce_reason='Bounced (IMAP)', smtp_response=%s WHERE track_token=%s;", [diagnostic_code, matched_token])
+                            except Exception as ex_b:
+                                print(f"[IMAP Bounce Parser Error] {ex_b}")
                             continue
 
                         if matched_token:
@@ -1452,6 +1491,7 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200
             SELECT se.id, se.track_token, se.sender_email, se.to_email,
                    se.company_name, se.owner_name, se.subject, se.sent_at, se.opened, se.opened_at,
                    se.replied, se.replied_at, se.alerted_48h, se.bounced, se.bounced_at,
+                   se.bounce_reason, se.smtp_response,
                    (SELECT r.body_preview FROM replies r WHERE r.track_token=se.track_token
                     ORDER BY r.received_at DESC LIMIT 1) AS reply_preview
             FROM sent_emails se {where_clause} ORDER BY se.sent_at DESC LIMIT %s;

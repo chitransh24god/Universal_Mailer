@@ -204,7 +204,9 @@ def init_db():
             replied_at TIMESTAMP,
             alerted_48h BOOLEAN DEFAULT FALSE,
             bounced BOOLEAN DEFAULT FALSE,
-            bounced_at TIMESTAMP
+            bounced_at TIMESTAMP,
+            bounce_reason TEXT,
+            smtp_response TEXT
         );
     """)
     # Migrations for sent_emails columns
@@ -220,6 +222,16 @@ def init_db():
     if not check_column_exists("sent_emails", "bounced_at"):
         try:
             execute_query("ALTER TABLE sent_emails ADD COLUMN bounced_at TIMESTAMP;", silent=True)
+        except Exception:
+            pass
+    if not check_column_exists("sent_emails", "bounce_reason"):
+        try:
+            execute_query("ALTER TABLE sent_emails ADD COLUMN bounce_reason TEXT;", silent=True)
+        except Exception:
+            pass
+    if not check_column_exists("sent_emails", "smtp_response"):
+        try:
+            execute_query("ALTER TABLE sent_emails ADD COLUMN smtp_response TEXT;", silent=True)
         except Exception:
             pass
         

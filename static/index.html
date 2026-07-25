@@ -2454,7 +2454,9 @@ select.form-control {
                 
                 container.innerHTML = data.emails.map(e => {
                     let statusBadge = '';
-                    if (e.replied) {
+                    if (e.bounced) {
+                        statusBadge = '<span class="badge badge-error" style="background:var(--danger-bg);color:var(--danger);border-color:var(--danger);">Bounced</span>';
+                    } else if (e.replied) {
                         statusBadge = '<span class="badge badge-done">Replied</span>';
                     } else if (e.opened) {
                         statusBadge = '<span class="badge badge-running">Opened</span>';
@@ -2480,12 +2482,23 @@ select.form-control {
                         <td style="text-align:center;">${actionBtn}</td>
                     </tr>`;
                     
-                    if (e.reply_preview) {
+                    if (e.reply_preview && !e.bounced) {
                         htmlRow += `
                         <tr class="reply-preview-row">
                             <td colspan="6">
                                 <div class="reply-preview-container">
                                     <b>Reply Preview:</b> "${e.reply_preview}"
+                                </div>
+                            </td>
+                        </tr>`;
+                    }
+                    if (e.bounced && (e.bounce_reason || e.smtp_response)) {
+                        htmlRow += `
+                        <tr class="reply-preview-row">
+                            <td colspan="6">
+                                <div class="reply-preview-container" style="background:var(--danger-bg); border-left-color:var(--danger);">
+                                    <b>Bounce Details:</b> ${e.bounce_reason || ''} 
+                                    <div style="font-size:11px; margin-top:4px; font-family:monospace;">${e.smtp_response || ''}</div>
                                 </div>
                             </td>
                         </tr>`;
