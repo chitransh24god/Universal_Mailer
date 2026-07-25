@@ -231,13 +231,18 @@ def get_campaign_schedule(campaign_id=""):
                 end_hr = st.get('end_hour', end_hr)
                 try:
                     wd_str = st.get('working_days', '0,1,2,3,4,5')
-                    w_days = [int(x.strip()) for x in str(wd_str).split(',') if x.strip().isdigit()]
+                    if str(wd_str).upper() == "IGNORE":
+                        w_days = "IGNORE"
+                    else:
+                        w_days = [int(x.strip()) for x in str(wd_str).split(',') if x.strip().isdigit()]
                 except Exception:
                     pass
     return tz_str, start_hr, end_hr, w_days
 
 def is_working_hours(campaign_id=""):
     tz_str, start_hr, end_hr, w_days = get_campaign_schedule(campaign_id)
+    if w_days == "IGNORE":
+        return True
     try:
         tz = pytz.timezone(tz_str)
     except Exception:
@@ -249,6 +254,8 @@ def is_working_hours(campaign_id=""):
 
 def secs_until_work(campaign_id=""):
     tz_str, start_hr, end_hr, w_days = get_campaign_schedule(campaign_id)
+    if w_days == "IGNORE":
+        return 0
     try:
         tz = pytz.timezone(tz_str)
     except Exception:
@@ -1994,12 +2001,16 @@ async def send_emails_public(request: Request, pwd: str = Form(...), sender_emai
 
 @app.post("/send-emails/")
 async def send_emails(request: Request, sender_email: str = Form(...), category: str = Form(...),
-                       file: UploadFile = File(...), is_scheduled: str = Form(None),
-                       scheduled_date: str = Form(None), scheduled_time: str = Form(None),
-                       campaign_name: str = Form(None), timezone: str = Form("Asia/Kolkata"),
-                       start_hour: int = Form(10), end_hour: int = Form(19), working_days: str = Form("0,1,2,3,4,5")):
+                      file: UploadFile = File(...), is_scheduled: str = Form(None),
+                      scheduled_date: str = Form(None), scheduled_time: str = Form(None),
+                      campaign_name: str = Form(None), timezone: str = Form("Asia/Kolkata"),
+                      start_hour: int = Form(10), end_hour: int = Form(19), working_days: str = Form("0,1,2,3,4,5"),
+                      ignore_working_hours: str = Form(None)):
     base_url = str(request.base_url).rstrip('/')
     
+    if ignore_working_hours == "true" or ignore_working_hours == "on":
+        working_days = "IGNORE"
+        
     if is_scheduled == "true" or is_scheduled is True or is_scheduled == "on":
         if not scheduled_date or not scheduled_time:
             return JSONResponse(status_code=400, content={"status": "error", "message": "Trigger Date and Time are required for scheduled campaigns."})
