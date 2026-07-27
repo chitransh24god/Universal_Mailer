@@ -767,8 +767,6 @@ select.form-control {
 .fw-600 { font-weight: 600; }
 .fw-700 { font-weight: 700; }
 </style>
-    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
 </head>
 <body>
 
@@ -1424,7 +1422,7 @@ select.form-control {
               <button id="tr-btn-bounced" class="btn btn-secondary btn-sm" onclick="loadTracking('bounced')">Bounced</button>
             </div>
             <div class="flex-row flex-wrap gap-8">
-              <select id="track-campaign-filter" style="width: 200px;" placeholder="Search Campaigns...">
+              <select id="track-campaign-filter" class="form-control" style="width: 220px;" onchange="applyFilters()">
                 <option value="">All Campaigns</option>
               </select>
               <input type="date" id="track-date-from" class="form-control text-sm">
@@ -1791,9 +1789,8 @@ select.form-control {
             } else if (tabName === 'draft') {
                 loadDraftSelect();
             } else if (tabName === 'tracking') {
-                populateCampaignDropdown().then(() => {
-                    loadTracking('all');
-                });
+                populateCampaignDropdown();
+                loadTracking('all');
                 loadReplies();
                 loadGlobalSettings();
             } else if (tabName === 'settings') {
@@ -2562,13 +2559,11 @@ select.form-control {
             const df = document.getElementById('track-date-from');
             const dt = document.getElementById('track-date-to');
             const sf = document.getElementById('tr-sender-filter');
+            const cf = document.getElementById('track-campaign-filter');
             if (df) df.value = '';
             if (dt) dt.value = '';
             if (sf) sf.value = '';
-            // Reset Tom Select campaign filter
-            if (campaignSelectInstance) {
-                campaignSelectInstance.setValue('', true);
-            }
+            if (cf) cf.value = '';
             loadTracking(currentFilter);
         }
 
@@ -3279,8 +3274,6 @@ select.form-control {
             });
         }
 
-        let campaignSelectInstance = null;
-
         async function populateCampaignDropdown() {
             try {
                 const resp = await fetch('/tracking-per-campaign');
@@ -3288,34 +3281,20 @@ select.form-control {
                 const sel = document.getElementById('track-campaign-filter');
                 if (!sel) return;
                 
-                if (!campaignSelectInstance) {
-                    campaignSelectInstance = new TomSelect('#track-campaign-filter', {
-                        create: false,
-                        sortField: { field: "text", direction: "asc" },
-                        placeholder: 'All Campaigns',
-                        onChange: function(val) {
-                            // Don't trigger filter during initial population
-                            if (campaignSelectInstance && campaignSelectInstance._populating) return;
-                            applyFilters();
-                        }
-                    });
-                }
-                
-                // Mark as populating so onChange doesn't fire
-                campaignSelectInstance._populating = true;
-                campaignSelectInstance.clearOptions();
-                campaignSelectInstance.addOption({value: '', text: 'All Campaigns'});
+                // Keep "All Campaigns" as first option
+                sel.innerHTML = '<option value="">All Campaigns</option>';
                 
                 const allCampaigns = rows.map(r => r.campaign_name).filter(c => c);
                 const uniqueCampaigns = [...new Set(allCampaigns)];
                 uniqueCampaigns.forEach(c => {
-                    campaignSelectInstance.addOption({value: c, text: c});
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    opt.textContent = c;
+                    sel.appendChild(opt);
                 });
                 
-                // Set to "All Campaigns" (empty value = no filter)
-                campaignSelectInstance.setValue('', true);
-                campaignSelectInstance._populating = false;
-                campaignSelectInstance.refreshOptions(false);
+                // Always default to All Campaigns
+                sel.value = '';
             } catch (e) {
                 console.error("Error populating campaigns dropdown", e);
             }
