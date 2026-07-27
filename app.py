@@ -1565,7 +1565,8 @@ async def debug_tracking():
             "columns_in_sent_emails": col_names,
             "full_query_ok": query_ok,
             "full_query_error": query_error,
-            "sample": len(rows) if rows else 0
+            "sample_count": len(rows) if rows else 0,
+            "hint": "If full_query_ok=true but UI shows 0, the bug is in JavaScript frontend."
         })
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})

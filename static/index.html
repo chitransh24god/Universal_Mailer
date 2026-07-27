@@ -1791,10 +1791,11 @@ select.form-control {
             } else if (tabName === 'draft') {
                 loadDraftSelect();
             } else if (tabName === 'tracking') {
-                loadTracking('all');
+                populateCampaignDropdown().then(() => {
+                    loadTracking('all');
+                });
                 loadReplies();
                 loadGlobalSettings();
-                populateCampaignDropdown();
             } else if (tabName === 'settings') {
                 loadSettingsData();
                 loadGlobalSettings();
