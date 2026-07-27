@@ -766,6 +766,35 @@ select.form-control {
 .text-warn   { color: var(--warn); }
 .fw-600 { font-weight: 600; }
 .fw-700 { font-weight: 700; }
+
+/* Searchable Campaign Dropdown */
+.cmp-drop-wrap { position: relative; width: 220px; }
+.cmp-drop-input {
+    width: 100%; padding: 6px 28px 6px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13px; background: var(--surface);
+    color: var(--text-main); cursor: pointer; box-sizing: border-box;
+    outline: none;
+}
+.cmp-drop-input:focus { border-color: var(--brand); box-shadow: 0 0 0 2px rgba(99,102,241,.15); }
+.cmp-drop-arrow {
+    position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+    pointer-events: none; color: var(--text-muted); font-size: 9px;
+}
+.cmp-drop-list {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    max-height: 220px; overflow-y: auto; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px; z-index: 2000;
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+}
+.cmp-drop-list.open { display: block; }
+.cmp-drop-item {
+    padding: 8px 12px; font-size: 13px; cursor: pointer;
+    color: var(--text-main); border-bottom: 1px solid #f1f5f9;
+    transition: background .12s;
+}
+.cmp-drop-item:last-child { border-bottom: none; }
+.cmp-drop-item:hover, .cmp-drop-item.selected { background: #f0f4ff; color: var(--brand); }
+.cmp-drop-empty { padding: 10px 12px; font-size: 12px; color: var(--text-muted); }
 </style>
 </head>
 <body>
@@ -1422,9 +1451,13 @@ select.form-control {
               <button id="tr-btn-bounced" class="btn btn-secondary btn-sm" onclick="loadTracking('bounced')">Bounced</button>
             </div>
             <div class="flex-row flex-wrap gap-8">
-              <select id="track-campaign-filter" class="form-control" style="width: 220px;" onchange="applyFilters()">
-                <option value="">All Campaigns</option>
-              </select>
+              <div class="cmp-drop-wrap" id="cmp-drop-wrap">
+                <input type="text" id="track-campaign-filter" class="cmp-drop-input"
+                       placeholder="All Campaigns" autocomplete="off" readonly
+                       onclick="cmpToggle()" oninput="cmpFilter()">
+                <span class="cmp-drop-arrow">&#9660;</span>
+                <div class="cmp-drop-list" id="cmp-drop-list"></div>
+              </div>
               <input type="date" id="track-date-from" class="form-control text-sm">
               <input type="date" id="track-date-to"   class="form-control text-sm">
               <select id="tr-sender-filter" class="form-control" style="width:200px;"></select>
@@ -2418,8 +2451,7 @@ select.form-control {
                 const dateFrom = document.getElementById('track-date-from')?.value || '';
                 const dateTo   = document.getElementById('track-date-to')?.value   || '';
                 const sender   = document.getElementById('tr-sender-filter')?.value || '';
-                let cmp        = document.getElementById('track-campaign-filter')?.value || '';
-                if (cmp === 'All Campaigns') cmp = '';
+                const cmp      = cmpSelectedValue || '';
 
                 const url = `/tracking-stats?filter=${filter}&limit=500` +
                     (dateFrom ? `&date_from=${dateFrom}` : '') +
@@ -2563,7 +2595,10 @@ select.form-control {
             if (df) df.value = '';
             if (dt) dt.value = '';
             if (sf) sf.value = '';
-            if (cf) cf.value = '';
+            // Reset campaign search dropdown
+            if (cf) { cf.value = ''; cf.placeholder = 'All Campaigns'; cf.readOnly = true; }
+            cmpSelectedValue = '';
+            cmpCloseList();
             loadTracking(currentFilter);
         }
 
@@ -3274,6 +3309,77 @@ select.form-control {
             });
         }
 
+        // === Campaign Searchable Dropdown ===
+        let cmpAllOptions = [];
+        let cmpSelectedValue = '';
+
+        function cmpToggle() {
+            const input = document.getElementById('track-campaign-filter');
+            const list  = document.getElementById('cmp-drop-list');
+            if (list.classList.contains('open')) {
+                cmpCloseList();
+            } else {
+                input.readOnly = false;
+                input.value = '';
+                input.placeholder = 'Search campaigns...';
+                cmpRenderList(cmpAllOptions);
+                list.classList.add('open');
+            }
+        }
+
+        function cmpFilter() {
+            const q = document.getElementById('track-campaign-filter').value.toLowerCase();
+            const filtered = cmpAllOptions.filter(c => c.toLowerCase().includes(q));
+            cmpRenderList(filtered);
+        }
+
+        function cmpRenderList(items) {
+            const list = document.getElementById('cmp-drop-list');
+            list.innerHTML = '';
+            // Always show All Campaigns at top
+            const allDiv = document.createElement('div');
+            allDiv.className = 'cmp-drop-item' + (cmpSelectedValue === '' ? ' selected' : '');
+            allDiv.textContent = 'All Campaigns';
+            allDiv.onclick = () => cmpSelect('', 'All Campaigns');
+            list.appendChild(allDiv);
+
+            if (items.length === 0) {
+                const e = document.createElement('div');
+                e.className = 'cmp-drop-empty';
+                e.textContent = 'No campaigns found';
+                list.appendChild(e);
+            } else {
+                items.forEach(c => {
+                    const d = document.createElement('div');
+                    d.className = 'cmp-drop-item' + (cmpSelectedValue === c ? ' selected' : '');
+                    d.textContent = c;
+                    d.onclick = () => cmpSelect(c, c);
+                    list.appendChild(d);
+                });
+            }
+        }
+
+        function cmpSelect(value, label) {
+            cmpSelectedValue = value;
+            const input = document.getElementById('track-campaign-filter');
+            input.value = '';
+            input.placeholder = label;
+            input.readOnly = true;
+            cmpCloseList();
+            applyFilters();
+        }
+
+        function cmpCloseList() {
+            document.getElementById('cmp-drop-list').classList.remove('open');
+        }
+
+        // Close on outside click
+        document.addEventListener('click', function(e) {
+            const wrap = document.getElementById('cmp-drop-wrap');
+            if (wrap && !wrap.contains(e.target)) cmpCloseList();
+        });
+        // ===================================
+
         async function populateCampaignDropdown() {
             try {
                 const resp = await fetch('/tracking-per-campaign');
@@ -3282,19 +3388,14 @@ select.form-control {
                 if (!sel) return;
                 
                 // Keep "All Campaigns" as first option
-                sel.innerHTML = '<option value="">All Campaigns</option>';
-                
                 const allCampaigns = rows.map(r => r.campaign_name).filter(c => c);
-                const uniqueCampaigns = [...new Set(allCampaigns)];
-                uniqueCampaigns.forEach(c => {
-                    const opt = document.createElement('option');
-                    opt.value = c;
-                    opt.textContent = c;
-                    sel.appendChild(opt);
-                });
-                
-                // Always default to All Campaigns
-                sel.value = '';
+                cmpAllOptions = [...new Set(allCampaigns)];
+                cmpRenderList(cmpAllOptions);
+                cmpCloseList();
+                // Set default
+                cmpSelectedValue = '';
+                const input = document.getElementById('track-campaign-filter');
+                if (input) { input.value = ''; input.placeholder = 'All Campaigns'; }
             } catch (e) {
                 console.error("Error populating campaigns dropdown", e);
             }
