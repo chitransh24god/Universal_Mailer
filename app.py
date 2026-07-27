@@ -1577,15 +1577,42 @@ async def debug_tracking():
             sum_ok = False
             sum_error = str(se2)
         
+        # Call the EXACT same logic as tracking-stats to see what it returns
+        try:
+            track_rows = execute_query("""
+                SELECT se.id, se.track_token, se.sender_email, se.to_email,
+                       se.company_name, se.owner_name, se.subject, se.sent_at, se.opened, se.opened_at,
+                       se.replied, se.replied_at, se.alerted_48h, se.bounced, se.bounced_at,
+                       se.bounce_reason, se.smtp_response,
+                       (SELECT r.body_preview FROM replies r WHERE r.track_token=se.track_token
+                        ORDER BY r.received_at DESC LIMIT 1) AS reply_preview
+                FROM sent_emails se ORDER BY se.sent_at DESC LIMIT 500;
+            """, fetch="all")
+            track_result = []
+            for r in (track_rows or []):
+                d = dict(r)
+                d["sent_at"] = str(d.get("sent_at",""))
+                d["opened_at"] = str(d.get("opened_at",""))
+                d["replied_at"] = str(d.get("replied_at",""))
+                track_result.append(d)
+            track_ok = True
+            track_error = None
+        except Exception as te:
+            track_result = []
+            track_ok = False
+            track_error = str(te)
+
         return JSONResponse({
             "total_in_db": count,
-            "columns": col_names,
             "full_query_with_replies_ok": full_ok,
             "full_query_with_replies_error": full_error,
-            "sample_count": len(rows_full) if rows_full else 0,
             "summary_ok": sum_ok,
             "summary_error": sum_error,
-            "summary_data": sumq
+            "summary_data": sumq,
+            "tracking_stats_simulation_ok": track_ok,
+            "tracking_stats_simulation_error": track_error,
+            "tracking_stats_email_count": len(track_result),
+            "tracking_stats_first_row": track_result[0] if track_result else None,
         })
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
