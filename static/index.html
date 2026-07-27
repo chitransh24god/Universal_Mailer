@@ -2558,12 +2558,16 @@ select.form-control {
         }
 
         function clearTrackingFilters() {
-            const df = document.getElementById('tr-date-from');
-            const dt = document.getElementById('tr-date-to');
+            const df = document.getElementById('track-date-from');
+            const dt = document.getElementById('track-date-to');
             const sf = document.getElementById('tr-sender-filter');
             if (df) df.value = '';
             if (dt) dt.value = '';
             if (sf) sf.value = '';
+            // Reset Tom Select campaign filter
+            if (campaignSelectInstance) {
+                campaignSelectInstance.setValue('', true);
+            }
             loadTracking(currentFilter);
         }
 
@@ -3287,14 +3291,19 @@ select.form-control {
                     campaignSelectInstance = new TomSelect('#track-campaign-filter', {
                         create: false,
                         sortField: { field: "text", direction: "asc" },
-                        placeholder: 'Search Campaigns...',
-                        onChange: function() { applyFilters(); }
+                        placeholder: 'All Campaigns',
+                        onChange: function(val) {
+                            // Don't trigger filter during initial population
+                            if (campaignSelectInstance && campaignSelectInstance._populating) return;
+                            applyFilters();
+                        }
                     });
                 }
                 
+                // Mark as populating so onChange doesn't fire
+                campaignSelectInstance._populating = true;
                 campaignSelectInstance.clearOptions();
-                campaignSelectInstance.addOption({value: 'All Campaigns', text: 'All Campaigns'});
-                campaignSelectInstance.setValue('All Campaigns', true);
+                campaignSelectInstance.addOption({value: '', text: 'All Campaigns'});
                 
                 const allCampaigns = rows.map(r => r.campaign_name).filter(c => c);
                 const uniqueCampaigns = [...new Set(allCampaigns)];
@@ -3302,6 +3311,9 @@ select.form-control {
                     campaignSelectInstance.addOption({value: c, text: c});
                 });
                 
+                // Set to "All Campaigns" (empty value = no filter)
+                campaignSelectInstance.setValue('', true);
+                campaignSelectInstance._populating = false;
                 campaignSelectInstance.refreshOptions(false);
             } catch (e) {
                 console.error("Error populating campaigns dropdown", e);
