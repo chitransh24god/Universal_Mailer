@@ -1535,14 +1535,38 @@ async def api_analyze_template(request: Request):
 async def debug_tracking():
     """Debug endpoint to diagnose tracking data issues."""
     try:
-        rows = execute_query("SELECT COUNT(*) as total FROM sent_emails;", fetch="one")
-        sample = execute_query("SELECT id, to_email, sender_email, sent_at, opened, bounced FROM sent_emails ORDER BY sent_at DESC LIMIT 5;", fetch="all")
-        sample_list = []
-        for r in (sample or []):
-            d = dict(r)
-            d["sent_at"] = str(d.get("sent_at",""))
-            sample_list.append(d)
-        return JSONResponse({"total_in_db": rows, "sample_rows": sample_list})
+        count = execute_query("SELECT COUNT(*) as total FROM sent_emails;", fetch="one")
+        
+        # Check which columns exist
+        cols = execute_query("""
+            SELECT column_name FROM information_schema.columns 
+            WHERE table_name='sent_emails' ORDER BY ordinal_position;
+        """, fetch="all")
+        col_names = [c['column_name'] for c in (cols or [])]
+        
+        # Try the full tracking query
+        try:
+            rows = execute_query("""
+                SELECT se.id, se.track_token, se.sender_email, se.to_email,
+                       se.company_name, se.owner_name, se.subject, se.sent_at, se.opened, se.opened_at,
+                       se.replied, se.replied_at, se.alerted_48h, se.bounced, se.bounced_at,
+                       se.bounce_reason, se.smtp_response
+                FROM sent_emails se ORDER BY se.sent_at DESC LIMIT 3;
+            """, fetch="all")
+            query_ok = True
+            query_error = None
+        except Exception as qe:
+            rows = []
+            query_ok = False
+            query_error = str(qe)
+        
+        return JSONResponse({
+            "total_in_db": count,
+            "columns_in_sent_emails": col_names,
+            "full_query_ok": query_ok,
+            "full_query_error": query_error,
+            "sample": len(rows) if rows else 0
+        })
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
