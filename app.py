@@ -1531,6 +1531,21 @@ async def api_analyze_template(request: Request):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 # Tracking & Logs Stats API
+@app.get("/debug-tracking")
+async def debug_tracking():
+    """Debug endpoint to diagnose tracking data issues."""
+    try:
+        rows = execute_query("SELECT COUNT(*) as total FROM sent_emails;", fetch="one")
+        sample = execute_query("SELECT id, to_email, sender_email, sent_at, opened, bounced FROM sent_emails ORDER BY sent_at DESC LIMIT 5;", fetch="all")
+        sample_list = []
+        for r in (sample or []):
+            d = dict(r)
+            d["sent_at"] = str(d.get("sent_at",""))
+            sample_list.append(d)
+        return JSONResponse({"total_in_db": rows, "sample_rows": sample_list})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 @app.get("/tracking-stats")
 async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200,
                          date_from: str = "", date_to: str = "", campaign_name: str = ""):
