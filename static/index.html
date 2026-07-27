@@ -2420,7 +2420,8 @@ select.form-control {
                 const dateFrom = document.getElementById('track-date-from')?.value || '';
                 const dateTo   = document.getElementById('track-date-to')?.value   || '';
                 const sender   = document.getElementById('tr-sender-filter')?.value || '';
-                const cmp      = document.getElementById('track-campaign-filter')?.value || '';
+                let cmp        = document.getElementById('track-campaign-filter')?.value || '';
+                if (cmp === 'All Campaigns') cmp = '';
 
                 const url = `/tracking-stats?filter=${filter}&limit=500` +
                     (dateFrom ? `&date_from=${dateFrom}` : '') +
@@ -3292,7 +3293,8 @@ select.form-control {
                 }
                 
                 campaignSelectInstance.clearOptions();
-                campaignSelectInstance.addOption({value: '', text: 'All Campaigns'});
+                campaignSelectInstance.addOption({value: 'All Campaigns', text: 'All Campaigns'});
+                campaignSelectInstance.setValue('All Campaigns', true);
                 
                 const allCampaigns = rows.map(r => r.campaign_name).filter(c => c);
                 const uniqueCampaigns = [...new Set(allCampaigns)];
