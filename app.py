@@ -1544,29 +1544,48 @@ async def debug_tracking():
         """, fetch="all")
         col_names = [c['column_name'] for c in (cols or [])]
         
-        # Try the full tracking query
+        # Test full query WITH replies subquery (same as actual tracking-stats)
         try:
-            rows = execute_query("""
+            rows_full = execute_query("""
                 SELECT se.id, se.track_token, se.sender_email, se.to_email,
                        se.company_name, se.owner_name, se.subject, se.sent_at, se.opened, se.opened_at,
                        se.replied, se.replied_at, se.alerted_48h, se.bounced, se.bounced_at,
-                       se.bounce_reason, se.smtp_response
+                       se.bounce_reason, se.smtp_response,
+                       (SELECT r.body_preview FROM replies r WHERE r.track_token=se.track_token
+                        ORDER BY r.received_at DESC LIMIT 1) AS reply_preview
                 FROM sent_emails se ORDER BY se.sent_at DESC LIMIT 3;
             """, fetch="all")
-            query_ok = True
-            query_error = None
+            full_ok = True
+            full_error = None
         except Exception as qe:
-            rows = []
-            query_ok = False
-            query_error = str(qe)
+            rows_full = []
+            full_ok = False
+            full_error = str(qe)
+
+        # Test summary query
+        try:
+            sumq = execute_query("""
+                SELECT COUNT(*) AS total,
+                       SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) AS opened,
+                       SUM(CASE WHEN bounced=TRUE THEN 1 ELSE 0 END) AS bounced
+                FROM sent_emails;
+            """, fetch="one")
+            sum_ok = True
+            sum_error = None
+        except Exception as se2:
+            sumq = None
+            sum_ok = False
+            sum_error = str(se2)
         
         return JSONResponse({
             "total_in_db": count,
-            "columns_in_sent_emails": col_names,
-            "full_query_ok": query_ok,
-            "full_query_error": query_error,
-            "sample_count": len(rows) if rows else 0,
-            "hint": "If full_query_ok=true but UI shows 0, the bug is in JavaScript frontend."
+            "columns": col_names,
+            "full_query_with_replies_ok": full_ok,
+            "full_query_with_replies_error": full_error,
+            "sample_count": len(rows_full) if rows_full else 0,
+            "summary_ok": sum_ok,
+            "summary_error": sum_error,
+            "summary_data": sumq
         })
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
