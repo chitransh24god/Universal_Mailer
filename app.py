@@ -1702,9 +1702,10 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200
         result = []
         for r in rows:
             d = dict(r)
-            d["sent_at"] = str(d["sent_at"]) if d["sent_at"] else ""
-            d["opened_at"] = str(d["opened_at"]) if d["opened_at"] else ""
+            d["sent_at"]    = str(d["sent_at"])    if d["sent_at"]    else ""
+            d["opened_at"]  = str(d["opened_at"])  if d["opened_at"]  else ""
             d["replied_at"] = str(d["replied_at"]) if d["replied_at"] else ""
+            d["bounced_at"] = str(d["bounced_at"]) if d["bounced_at"] else ""
             result.append(d)
             
         return JSONResponse({"summary": summary, "emails": result})
