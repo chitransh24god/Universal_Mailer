@@ -1389,9 +1389,16 @@ select.form-control {
 
           <!-- Activity Log -->
           <div class="card">
-            <div class="card-header">
+            <div class="card-header" style="flex-wrap:wrap;gap:8px;">
               <div class="card-title">📋 Activity Log</div>
-              <span class="badge badge-running">Live</span>
+              <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+                <span class="badge badge-running" id="monitor-live-badge">Live</span>
+                <input type="date" id="monitor-log-date" class="form-control text-sm"
+                       style="width:150px;font-size:12px;"
+                       onchange="filterMonitorLogs()"
+                       title="Filter logs by date">
+                <button class="btn btn-ghost btn-sm" onclick="clearMonitorDateFilter()" title="Show all logs">✕ All</button>
+              </div>
             </div>
             <div class="log-box" id="monitor-logs">Connecting...</div>
           </div>
@@ -1826,6 +1833,13 @@ select.form-control {
                 loadTracking('all');
                 loadReplies();
                 loadGlobalSettings();
+            } else if (tabName === 'monitor') {
+                // Set today's date as default filter
+                const di = document.getElementById('monitor-log-date');
+                if (di && !di.value) {
+                    di.value = new Date().toISOString().split('T')[0];
+                }
+                fetchStatus();
             } else if (tabName === 'settings') {
                 loadSettingsData();
                 loadGlobalSettings();
@@ -2163,22 +2177,41 @@ select.form-control {
                     statusBadgeContainer.innerHTML = '<span class="badge badge-idle">Idle</span>';
                 }
                 
-                const logsBox = document.getElementById('monitor-logs');
-                if (logsBox) {
-                    const logsHtml = data.log.map(line => {
-                        if (line.includes('OK')) return `<div class="log-ok">${line}</div>`;
-                        if (line.includes('FAIL') || line.includes('ERROR')) return `<div class="log-err">${line}</div>`;
-                        if (line.includes('Paused') || line.includes('limit') || line.includes('Outside')) return `<div class="log-warn">${line}</div>`;
-                        return `<div>${line}</div>`;
-                    }).join('');
-                    logsBox.innerHTML = logsHtml || 'No activity.';
-                    logsBox.scrollTop = logsBox.scrollHeight;
-                }
+                // Store full logs for date filtering
+                window._monitorAllLogs = data.log;
+                renderMonitorLogs(data.log);
                 
                 loadScheduledCampaigns();
             } catch (err) {
                 console.error("Poller error:", err);
             }
+        }
+
+        function renderMonitorLogs(lines) {
+            const logsBox = document.getElementById('monitor-logs');
+            if (!logsBox) return;
+            const selectedDate = document.getElementById('monitor-log-date')?.value || '';
+            const filtered = selectedDate
+                ? lines.filter(l => l.includes(selectedDate) || l.startsWith(selectedDate))
+                : lines;
+            const logsHtml = filtered.map(line => {
+                if (line.includes('OK')) return `<div class="log-ok">${line}</div>`;
+                if (line.includes('FAIL') || line.includes('ERROR')) return `<div class="log-err">${line}</div>`;
+                if (line.includes('Paused') || line.includes('limit') || line.includes('Outside')) return `<div class="log-warn">${line}</div>`;
+                return `<div>${line}</div>`;
+            }).join('');
+            logsBox.innerHTML = logsHtml || `<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;">No activity for ${selectedDate || 'selected date'}.</div>`;
+            logsBox.scrollTop = logsBox.scrollHeight;
+        }
+
+        function filterMonitorLogs() {
+            renderMonitorLogs(window._monitorAllLogs || []);
+        }
+
+        function clearMonitorDateFilter() {
+            const di = document.getElementById('monitor-log-date');
+            if (di) di.value = '';
+            renderMonitorLogs(window._monitorAllLogs || []);
         }
 
         async function cancelCampaign(campaignId) {
