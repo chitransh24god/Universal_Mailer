@@ -1377,9 +1377,16 @@ select.form-control {
           <!-- Active Campaigns -->
           <div>
             <div class="card mb-16">
-              <div class="card-header">
+              <div class="card-header" style="flex-wrap:wrap;gap:8px;">
                 <div class="card-title">🚀 Active Campaigns</div>
-                <button class="btn btn-ghost btn-sm" onclick="fetchStatus()">↻ Refresh</button>
+                <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+                  <input type="date" id="monitor-campaign-date" class="form-control text-sm"
+                         style="width:150px;font-size:12px;"
+                         onchange="fetchStatus()"
+                         title="Filter campaigns by start date">
+                  <button class="btn btn-ghost btn-sm" onclick="clearCampaignDateFilter()" title="Show all">✕ All</button>
+                  <button class="btn btn-ghost btn-sm" onclick="fetchStatus()">↻ Refresh</button>
+                </div>
               </div>
               <div id="monitor-campaigns-list">
                 <div class="text-muted text-sm" style="text-align:center;padding:20px;">No active campaigns.</div>
@@ -1834,11 +1841,12 @@ select.form-control {
                 loadReplies();
                 loadGlobalSettings();
             } else if (tabName === 'monitor') {
-                // Set today's date as default filter
-                const di = document.getElementById('monitor-log-date');
-                if (di && !di.value) {
-                    di.value = new Date().toISOString().split('T')[0];
-                }
+                // Set today's date as default for both filters
+                const today = new Date().toISOString().split('T')[0];
+                const logDi = document.getElementById('monitor-log-date');
+                const cmpDi = document.getElementById('monitor-campaign-date');
+                if (logDi && !logDi.value) logDi.value = today;
+                if (cmpDi && !cmpDi.value) cmpDi.value = today;
                 fetchStatus();
             } else if (tabName === 'settings') {
                 loadSettingsData();
@@ -2127,8 +2135,15 @@ select.form-control {
                 let anyPaused = false;
                 let html = '';
                 
+                const campaignDateFilter = document.getElementById('monitor-campaign-date')?.value || '';
+
                 for (const [email, campaignList] of Object.entries(senders)) {
                     campaignList.forEach(st => {
+                        // Filter by started_at date if filter is set
+                        if (campaignDateFilter && st.started_at && !st.started_at.includes(campaignDateFilter)) {
+                            return;
+                        }
+
                         const progPct = st.total_rows > 0 ? Math.min(100, Math.round((st.current_row / st.total_rows) * 100)) : 0;
                         let badge = '';
                         if (st.running && !st.paused) {
@@ -2212,6 +2227,12 @@ select.form-control {
             const di = document.getElementById('monitor-log-date');
             if (di) di.value = '';
             renderMonitorLogs(window._monitorAllLogs || []);
+        }
+
+        function clearCampaignDateFilter() {
+            const di = document.getElementById('monitor-campaign-date');
+            if (di) di.value = '';
+            fetchStatus();
         }
 
         async function cancelCampaign(campaignId) {
