@@ -1183,6 +1183,23 @@ async def get_status():
         logs = list(shared_log)
     return {"sent_today": get_today_sent(), "senders": senders_status, "log": logs}
 
+@app.post("/api/clear-log")
+async def clear_activity_log():
+    """Clear the in-memory activity log."""
+    with log_lock:
+        shared_log.clear()
+    return {"ok": True, "message": "Activity log cleared."}
+
+@app.post("/api/clear-completed-campaigns")
+async def clear_completed_campaigns():
+    """Remove all completed (not running, not paused) campaigns from memory."""
+    with campaigns_lock:
+        to_remove = [cid for cid, st in campaigns.items()
+                     if not st.get("running") and not st.get("paused")]
+        for cid in to_remove:
+            del campaigns[cid]
+    return {"ok": True, "removed": len(to_remove)}
+
 # Global Settings API
 @app.get("/api/settings")
 async def get_settings():
