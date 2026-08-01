@@ -2290,21 +2290,36 @@ async def cancel_scheduled_campaign(request: Request):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/api/campaigns/cancel")
-
 async def cancel_campaign(request: Request):
     try:
         body = await request.json()
-        campaign_id = body.get("campaign_id")
+        campaign_id = body.get("campaign_id", "").strip()
         if not campaign_id:
             return JSONResponse(status_code=400, content={"error": "campaign_id is required"})
             
+        target_cids = []
         with campaigns_lock:
             if campaign_id in campaigns:
-                campaigns[campaign_id]["cancelled"] = True
-                add_log(f"Cancellation requested for campaign {campaign_id}")
-                return JSONResponse({"ok": True})
+                target_cids.append(campaign_id)
             else:
-                return JSONResponse(status_code=404, content={"error": "Campaign not found or not active"})
+                for cid, st in list(campaigns.items()):
+                    if cid == campaign_id or cid.startswith(campaign_id) or campaign_id in cid or st.get("sender_email") == campaign_id:
+                        target_cids.append(cid)
+            
+            for cid in target_cids:
+                if cid in campaigns:
+                    campaigns[cid]["cancelled"] = True
+                    campaigns[cid]["running"] = False
+                    campaigns[cid]["paused"] = False
+                    add_log(f"Campaign cancelled & stopped for {cid}", cid)
+
+        # Instantly delete from PostgreSQL active_campaigns table
+        try:
+            execute_query("DELETE FROM active_campaigns WHERE campaign_id = %s OR campaign_id LIKE %s OR sender_email = %s;", [campaign_id, f"{campaign_id}%", campaign_id])
+        except Exception as dbe:
+            print(f"Cancel DB delete error: {dbe}")
+
+        return JSONResponse({"ok": True, "cancelled": target_cids if target_cids else [campaign_id]})
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
