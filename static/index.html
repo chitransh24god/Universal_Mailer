@@ -1767,6 +1767,42 @@ select.form-control {
                 </button>
               </div>
             </div>
+
+            <!-- Sender Groups Management -->
+            <div class="card mb-16">
+              <div class="card-header">
+                <div class="card-title">👥 Sender Account Groups (Load Balancer)</div>
+              </div>
+              <div class="text-xs text-muted mb-12">Combine multiple sender accounts into pools to automatically rotate and distribute email dispatches.</div>
+
+              <div class="form-group">
+                <label class="form-label">Group Name *</label>
+                <input type="text" id="grp-name-input" class="form-control" placeholder="e.g. Sales Team Pool A">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Daily Limit Per Account</label>
+                <input type="number" id="grp-limit-input" class="form-control" value="250" placeholder="250">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Select Member Accounts *</label>
+                <div id="grp-members-checklist" style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:8px;background:var(--surface);">
+                  <div class="text-muted text-xs">Loading senders…</div>
+                </div>
+              </div>
+
+              <button class="btn btn-primary btn-sm mt-8" onclick="saveSenderGroup()">+ Create Sender Group</button>
+              <div id="grp-status-msg" style="margin-top:6px;font-size:12px;"></div>
+
+              <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
+                <div style="font-size:12px;font-weight:600;margin-bottom:8px;">Active Sender Groups</div>
+                <div id="settings-groups-list" style="display:flex;flex-direction:column;gap:6px;">
+                  <div class="text-muted text-xs">No sender groups created.</div>
+                </div>
+              </div>
+            </div>
+
           </div>
 
         </div>
@@ -2047,7 +2083,6 @@ select.form-control {
                 const response = await fetch('/api/senders');
                 sendersList = await response.json();
                 
-                const launchSel = document.getElementById('launch-sender');
                 const assocSel = document.getElementById('tmpl-sender-assoc');
                 const mapSel = document.getElementById('map-sender-select');
                 const trSenderFilter = document.getElementById('tr-sender-filter');
@@ -2055,13 +2090,14 @@ select.form-control {
                 let opts = sendersList.map(s => `<option value="${s.email}">${s.display_name} &lt;${s.email}&gt;</option>`).join('');
                 if (!opts) opts = `<option value="">No senders configured</option>`;
                 
-                launchSel.innerHTML = opts;
-                assocSel.innerHTML = `<option value="">Generic (All Senders)</option>` + opts;
-                mapSel.innerHTML = opts;
+                if (assocSel) assocSel.innerHTML = `<option value="">Generic (All Senders)</option>` + opts;
+                if (mapSel) mapSel.innerHTML = opts;
                 if (trSenderFilter) {
                     trSenderFilter.innerHTML = `<option value="">All Senders</option>` + opts;
                 }
                 
+                updateLaunchSenderDropdown();
+                renderGroupMembersChecklist();
                 checkGmailWarning();
             } catch (err) {
                 console.error("Error loading senders:", err);
@@ -3480,10 +3516,128 @@ select.form-control {
             }
         }
 
+        // ── SENDER GROUPS JS ──────────────────────────────────
+        let senderGroupsList = [];
+
+        async function loadSenderGroups() {
+            try {
+                const res = await fetch('/api/sender-groups');
+                const data = await res.json();
+                senderGroupsList = data.groups || [];
+                renderSenderGroupsList();
+                renderGroupMembersChecklist();
+                updateLaunchSenderDropdown();
+            } catch (e) {
+                console.error("Error loading sender groups:", e);
+            }
+        }
+
+        function renderGroupMembersChecklist() {
+            const box = document.getElementById('grp-members-checklist');
+            if (!box) return;
+            if (!sendersList || sendersList.length === 0) {
+                box.innerHTML = `<div class="text-muted text-xs">No connected sender accounts found.</div>`;
+                return;
+            }
+            box.innerHTML = sendersList.map(s => `
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px;cursor:pointer;">
+                    <input type="checkbox" name="grp-member-check" value="${s.email}">
+                    <span><strong>${s.display_name || s.email.split('@')[0]}</strong> (${s.email})</span>
+                </label>
+            `).join('');
+        }
+
+        function renderSenderGroupsList() {
+            const box = document.getElementById('settings-groups-list');
+            if (!box) return;
+            if (!senderGroupsList || senderGroupsList.length === 0) {
+                box.innerHTML = `<div class="text-muted text-xs">No sender groups created yet.</div>`;
+                return;
+            }
+            box.innerHTML = senderGroupsList.map(g => `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;">
+                    <div>
+                        <div style="font-weight:600;font-size:13px;color:var(--text-primary);">👥 ${g.group_name}</div>
+                        <div style="font-size:11px;color:var(--text-muted);">${g.member_emails.length} Accounts &bull; Limit: ${g.daily_limit_per_account}/acc</div>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" onclick="deleteSenderGroup(${g.id})" title="Delete Group" style="color:var(--danger);">✕</button>
+                </div>
+            `).join('');
+        }
+
+        async function saveSenderGroup() {
+            const nameInput = document.getElementById('grp-name-input');
+            const limitInput = document.getElementById('grp-limit-input');
+            const msg = document.getElementById('grp-status-msg');
+            const groupName = nameInput?.value?.trim();
+            const dailyLimit = parseInt(limitInput?.value || 250);
+
+            const checkedNodes = document.querySelectorAll('input[name="grp-member-check"]:checked');
+            const memberEmails = Array.from(checkedNodes).map(n => n.value);
+
+            if (!groupName) { alert("Please enter a Group Name."); return; }
+            if (memberEmails.length === 0) { alert("Please select at least 1 sender account for the group."); return; }
+
+            try {
+                const res = await fetch('/api/sender-groups', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ group_name: groupName, daily_limit_per_account: dailyLimit, member_emails: memberEmails })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    if (nameInput) nameInput.value = '';
+                    if (msg) { msg.style.color = 'var(--success)'; msg.textContent = '✅ Sender group saved!'; }
+                    loadSenderGroups();
+                } else {
+                    if (msg) { msg.style.color = 'var(--danger)'; msg.textContent = '❌ Error: ' + (data.error || 'Failed'); }
+                }
+            } catch (e) {
+                if (msg) { msg.style.color = 'var(--danger)'; msg.textContent = '❌ Connection error.'; }
+            }
+        }
+
+        async function deleteSenderGroup(gid) {
+            if (!confirm("Delete this Sender Group?")) return;
+            try {
+                await fetch(`/api/sender-groups/${gid}`, { method: 'DELETE' });
+                loadSenderGroups();
+            } catch (e) {
+                alert("Error deleting group: " + e);
+            }
+        }
+
+        function updateLaunchSenderDropdown() {
+            const sel = document.getElementById('launch-sender') || document.getElementById('snd-select');
+            if (!sel) return;
+
+            let html = ``;
+
+            if (senderGroupsList && senderGroupsList.length > 0) {
+                html += `<optgroup label="👥 Sender Groups (Load Balancer)">`;
+                senderGroupsList.forEach(g => {
+                    html += `<option value="group:${g.id}">👥 Group: ${g.group_name} (${g.member_emails.length} Accounts)</option>`;
+                });
+                html += `</optgroup>`;
+            }
+
+            if (sendersList && sendersList.length > 0) {
+                html += `<optgroup label="📧 Individual Sender Accounts">`;
+                sendersList.forEach(s => {
+                    html += `<option value="${s.email}">${s.display_name || s.email} (${s.email})</option>`;
+                });
+                html += `</optgroup>`;
+            }
+
+            if (!html) html = `<option value="">No senders or groups configured</option>`;
+            sel.innerHTML = html;
+        }
+
         // ── INIT ──────────────────────────────────────────
         window.onload = function() {
             initData();
             loadDashboardData();
+            loadSenderGroups();
         };
 </script>
 </body>

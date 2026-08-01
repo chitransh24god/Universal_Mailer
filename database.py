@@ -316,6 +316,28 @@ def init_db():
             pass
 
     
+    # 11. Sender Groups
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS sender_groups (
+            id SERIAL PRIMARY KEY,
+            group_name TEXT UNIQUE NOT NULL,
+            daily_limit_per_account INTEGER DEFAULT 250,
+            delay_min_secs INTEGER DEFAULT 60,
+            delay_max_secs INTEGER DEFAULT 120,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
+    # 12. Sender Group Members
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS sender_group_members (
+            id SERIAL PRIMARY KEY,
+            group_id INTEGER NOT NULL,
+            sender_email TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
     seed_defaults()
 
 def seed_defaults():

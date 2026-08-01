@@ -593,19 +593,35 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
     except Exception as e:
         print(f"History logging error: {e}")
         
-    # Load sender configurations from DB
-    sender_config = execute_query("SELECT * FROM sender_accounts WHERE email = %s;", [sender_email], fetch="one")
-    if not sender_config:
-        add_log(f"ERROR: Sender configuration for {sender_email} not found in database!", campaign_id)
-        with campaigns_lock:
-            campaigns[campaign_id]["running"] = False
-        return
-        
-    provider_type = sender_config.get("provider_type", "brevo").lower()
-    api_key = sender_config.get("api_key")
-    daily_limit = sender_config.get("daily_limit") or DAILY_LIMIT
-    delay_min = sender_config.get("delay_min") if sender_config.get("delay_min") is not None else DELAY_MIN_SECS
-    delay_max = sender_config.get("delay_max") if sender_config.get("delay_max") is not None else DELAY_MAX_SECS
+    # Sender configuration / Group configuration setup
+    is_group = False
+    group_members = []
+    group_info = None
+
+    if str(sender_email).startswith("group:"):
+        is_group = True
+        try:
+            gid = int(sender_email.split("group:")[1])
+            group_info = execute_query("SELECT * FROM sender_groups WHERE id=%s;", [gid], fetch="one")
+            m_rows = execute_query("SELECT sender_email FROM sender_group_members WHERE group_id=%s;", [gid], fetch="all") or []
+            for mr in m_rows:
+                sc = execute_query("SELECT * FROM sender_accounts WHERE email=%s;", [mr["sender_email"]], fetch="one")
+                if sc and sc.get("active", True):
+                    group_members.append(sc)
+        except Exception as ge:
+            print(f"Group parse error: {ge}")
+
+    if not is_group:
+        sender_config = execute_query("SELECT * FROM sender_accounts WHERE email = %s;", [sender_email], fetch="one")
+        if not sender_config:
+            add_log(f"ERROR: Sender configuration for {sender_email} not found in database!", campaign_id)
+            with campaigns_lock:
+                campaigns[campaign_id]["running"] = False
+            return
+
+    consecutive_empty = 0
+    rr_index = 0
+
     for index, row in df.iterrows():
         if index < start_row:
             continue
@@ -616,20 +632,74 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
                 add_log(f"Campaign cancelled/stopped by user.", campaign_id)
                 break
 
-        # Check daily limit
-        sender_sent_today = get_sender_today_sent(sender_email)
-        if sender_sent_today >= daily_limit:
-            add_log(f"⚠️ [Limit Reached] Today's limit of {daily_limit} reached. It will continue tomorrow automatically.", campaign_id)
-            with campaigns_lock:
-                campaigns[campaign_id]["paused"] = True
-                
-            if interruptible_sleep(secs_until_work(campaign_id) + 5, campaign_id):
+        # Check empty row & 20-consecutive-empty threshold
+        customer_email = str(row.get(email_col, row.get('Email', ''))).strip()
+        if not customer_email or customer_email.lower() in ('nan', 'none', ''):
+            consecutive_empty += 1
+            if consecutive_empty >= 20:
+                add_log(f"[{index+1}/{total}] 🛑 Stopped campaign: Encountered 20 consecutive empty rows.", campaign_id)
                 break
-                
-            with campaigns_lock:
-                campaigns[campaign_id]["paused"] = False
-            add_log(f"Resuming campaign ({category}) for {sender_email}", campaign_id)
+            continue
+        
+        # Valid email found: reset consecutive empty counter
+        consecutive_empty = 0
+
+        # Determine effective sender configuration for this email
+        curr_sender_config = None
+        curr_sender_email = sender_email
+        curr_sender_name = sender_name
+
+        if is_group:
+            if not group_members:
+                add_log(f"ERROR: Sender group has no active member accounts!", campaign_id)
+                break
             
+            # Find next available sender in group with remaining quota
+            attempts = 0
+            picked_sc = None
+            daily_limit_group = group_info.get("daily_limit_per_account", 250) if group_info else 250
+            
+            while attempts < len(group_members):
+                candidate_sc = group_members[rr_index % len(group_members)]
+                rr_index += 1
+                attempts += 1
+                cand_email = candidate_sc["email"]
+                cand_sent = get_sender_today_sent(cand_email)
+                cand_limit = candidate_sc.get("daily_limit") or daily_limit_group
+                if cand_sent < cand_limit:
+                    picked_sc = candidate_sc
+                    break
+            
+            if not picked_sc:
+                add_log(f"⚠️ [Group Limit Reached] All accounts in group reached today's limit. Pausing until tomorrow.", campaign_id)
+                with campaigns_lock:
+                    campaigns[campaign_id]["paused"] = True
+                if interruptible_sleep(secs_until_work(campaign_id) + 5, campaign_id):
+                    break
+                with campaigns_lock:
+                    campaigns[campaign_id]["paused"] = False
+                continue
+
+            curr_sender_config = picked_sc
+            curr_sender_email = picked_sc["email"]
+            curr_sender_name = picked_sc.get("display_name") or sender_name
+        else:
+            curr_sender_config = sender_config
+
+        # Check single daily limit if single sender
+        if not is_group:
+            daily_limit = curr_sender_config.get("daily_limit") or DAILY_LIMIT
+            sender_sent_today = get_sender_today_sent(curr_sender_email)
+            if sender_sent_today >= daily_limit:
+                add_log(f"⚠️ [Limit Reached] Today's limit of {daily_limit} reached for {curr_sender_email}. Pausing until tomorrow.", campaign_id)
+                with campaigns_lock:
+                    campaigns[campaign_id]["paused"] = True
+                if interruptible_sleep(secs_until_work(campaign_id) + 5, campaign_id):
+                    break
+                with campaigns_lock:
+                    campaigns[campaign_id]["paused"] = False
+                add_log(f"Resuming campaign ({category}) for {curr_sender_email}", campaign_id)
+
         # Working hours check
         if not is_working_hours(campaign_id):
             secs = secs_until_work(campaign_id)
@@ -640,11 +710,11 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
                 break
             with campaigns_lock:
                 campaigns[campaign_id]["paused"] = False
-            add_log(f"Resuming (working hours reached) for {sender_email} ({category})", campaign_id)
-            
-        customer_email = str(row.get(email_col, row.get('Email', ''))).strip()
-        if not customer_email or customer_email.lower() in ('nan', 'none', ''):
-            continue
+            add_log(f"Resuming (working hours reached) for {curr_sender_email} ({category})", campaign_id)
+
+        provider_type = curr_sender_config.get("provider_type", "brevo").lower()
+        delay_min = curr_sender_config.get("delay_min") if curr_sender_config.get("delay_min") is not None else DELAY_MIN_SECS
+        delay_max = curr_sender_config.get("delay_max") if curr_sender_config.get("delay_max") is not None else DELAY_MAX_SECS
             
         row_dict = {str(k).strip(): str(v).strip() for k, v in row.to_dict().items()}
         body, subject = personalize_body(template_text, email_subject, row_dict)
@@ -661,7 +731,7 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
                     """INSERT INTO sent_emails
                        (track_token, sender_email, to_email, company_name, owner_name, subject, message_id, campaign_name, bounced, bounced_at)
                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s, TRUE, NOW()) ON CONFLICT DO NOTHING;""",
-                    [track_token, sender_email, customer_email,
+                    [track_token, curr_sender_email, customer_email,
                      row_dict.get('Company Name', ''), row_dict.get('Owner Name', ''), subject, "mx-failed", campaign_name]
                 )
             except Exception as e:
@@ -675,8 +745,8 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
             success, result = send_via_custom_smtp(
                 to_email=customer_email, subject=subject,
                 html_body=html_body, plain_body=body,
-                sender_email=sender_email, sender_name=sender_name,
-                config=sender_config
+                sender_email=curr_sender_email, sender_name=curr_sender_name,
+                config=curr_sender_config
             )
             if success:
                 msg_id = result
@@ -688,14 +758,14 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
             admin_receiver = admin_receiver["value"] if admin_receiver and admin_receiver["value"] else "admin@mybankloan.ai"
             
             # Centralize replies.
-            reply_email = admin_receiver if "mybankloan.ai" in sender_email.lower() else sender_email
+            reply_email = admin_receiver if "mybankloan.ai" in curr_sender_email.lower() else curr_sender_email
             payload = {
-                "sender": {"name": sender_name, "email": sender_email},
+                "sender": {"name": curr_sender_name, "email": curr_sender_email},
                 "to": [{"email": customer_email}],
                 "subject": subject,
                 "htmlContent": html_body,
                 "textContent": body,
-                "replyTo": {"email": reply_email, "name": sender_name},
+                "replyTo": {"email": reply_email, "name": curr_sender_name},
             }
             try:
                 resp = requests.post(
@@ -727,7 +797,7 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
                     """INSERT INTO sent_emails
                        (track_token, sender_email, to_email, company_name, owner_name, subject, message_id, campaign_name, bounced)
                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s, FALSE) ON CONFLICT DO NOTHING;""",
-                    [track_token, sender_email, customer_email,
+                    [track_token, curr_sender_email, customer_email,
                      row_dict.get('Company Name', ''), row_dict.get('Owner Name', ''), subject, msg_id, campaign_name]
                 )
             except Exception as te:
@@ -2225,6 +2295,68 @@ async def cancel_campaign(request: Request):
                 return JSONResponse({"ok": True})
             else:
                 return JSONResponse(status_code=404, content={"error": "Campaign not found or not active"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+# ── Sender Groups API ──────────────────────────────────────────────────────────
+@app.get("/api/sender-groups")
+async def get_sender_groups_api():
+    try:
+        groups = execute_query("SELECT * FROM sender_groups ORDER BY group_name;", fetch="all") or []
+        res = []
+        for g in groups:
+            gid = g["id"]
+            members = execute_query("SELECT sender_email FROM sender_group_members WHERE group_id=%s;", [gid], fetch="all") or []
+            member_emails = [m["sender_email"] for m in members]
+            res.append({
+                "id": gid,
+                "group_name": g["group_name"],
+                "daily_limit_per_account": g.get("daily_limit_per_account", 250),
+                "delay_min_secs": g.get("delay_min_secs", 60),
+                "delay_max_secs": g.get("delay_max_secs", 120),
+                "member_emails": member_emails,
+                "created_at": str(g.get("created_at", ""))
+            })
+        return JSONResponse({"groups": res})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/sender-groups")
+async def create_sender_group_api(request: Request):
+    try:
+        body = await request.json()
+        group_name = str(body.get("group_name", "")).strip()
+        member_emails = body.get("member_emails", [])
+        daily_limit = int(body.get("daily_limit_per_account", 250))
+
+        if not group_name:
+            return JSONResponse(status_code=400, content={"error": "Group name required"})
+        if not member_emails:
+            return JSONResponse(status_code=400, content={"error": "At least one sender email required in group"})
+
+        execute_query("""
+            INSERT INTO sender_groups (group_name, daily_limit_per_account)
+            VALUES (%s, %s)
+            ON CONFLICT (group_name) DO UPDATE SET daily_limit_per_account=EXCLUDED.daily_limit_per_account;
+        """, [group_name, daily_limit])
+
+        g_row = execute_query("SELECT id FROM sender_groups WHERE group_name=%s;", [group_name], fetch="one")
+        gid = g_row["id"]
+
+        execute_query("DELETE FROM sender_group_members WHERE group_id=%s;", [gid])
+        for em in member_emails:
+            execute_query("INSERT INTO sender_group_members (group_id, sender_email) VALUES (%s, %s);", [gid, em.strip()])
+
+        return JSONResponse({"ok": True, "group_id": gid})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.delete("/api/sender-groups/{group_id}")
+async def delete_sender_group_api(group_id: int):
+    try:
+        execute_query("DELETE FROM sender_group_members WHERE group_id=%s;", [group_id])
+        execute_query("DELETE FROM sender_groups WHERE id=%s;", [group_id])
+        return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
