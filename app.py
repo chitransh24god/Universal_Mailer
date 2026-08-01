@@ -776,10 +776,11 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
                 "textContent": body,
                 "replyTo": {"email": reply_email, "name": curr_sender_name},
             }
+            curr_api_key = curr_sender_config.get("api_key", "")
             try:
                 resp = requests.post(
                     BREVO_API_URL, json=payload,
-                    headers={"accept": "application/json", "content-type": "application/json", "api-key": api_key},
+                    headers={"accept": "application/json", "content-type": "application/json", "api-key": curr_api_key},
                     timeout=30
                 )
                 if resp.status_code in (200, 201):
