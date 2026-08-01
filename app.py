@@ -289,13 +289,22 @@ def secs_until_work(campaign_id=""):
         
     return max(0, int((target - now).total_seconds()))
 
+_mx_cache = {}
+
 def check_domain_mx(email):
     """Check if the email domain has valid MX records. Returns True if valid, False if guaranteed bounce."""
     try:
-        domain = email.split('@')[-1]
+        domain = email.split('@')[-1].lower().strip()
+        if not domain:
+            return False
+        if domain in _mx_cache:
+            return _mx_cache[domain]
         answers = dns.resolver.resolve(domain, 'MX')
-        return len(answers) > 0
+        res = len(answers) > 0
+        _mx_cache[domain] = res
+        return res
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers, dns.exception.Timeout):
+        _mx_cache[domain] = False
         return False
     except Exception:
         return True # Default to True on unknown errors to avoid false positives
