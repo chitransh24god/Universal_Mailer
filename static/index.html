@@ -2135,7 +2135,7 @@ select.form-control {
         let pollInterval = null;
         function startPolling() {
             if (pollInterval) clearInterval(pollInterval);
-            pollInterval = setInterval(fetchStatus, 3000);
+            pollInterval = setInterval(fetchStatus, 5000);
             fetchStatus();
         }
 
@@ -2210,8 +2210,6 @@ select.form-control {
                 // Store full logs for date filtering
                 window._monitorAllLogs = data.log;
                 renderMonitorLogs(data.log);
-                
-                loadScheduledCampaigns();
             } catch (err) {
                 console.error("Poller error:", err);
             }

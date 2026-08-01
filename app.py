@@ -174,13 +174,23 @@ def smart_parse_excel(file_bytes):
         
     return out, 'Email'
 
+_today_sent_cache = {"date": None, "val": 0, "last_check": 0}
+
 def get_today_sent():
+    now_ts = time.time()
+    today_dt = date.today()
+    if _today_sent_cache["date"] == today_dt and (now_ts - _today_sent_cache["last_check"]) < 30:
+        return _today_sent_cache["val"]
     try:
-        row = execute_query("SELECT sent_count FROM daily_counter WHERE counter_date = %s;", [date.today()], fetch="one")
-        return row["sent_count"] if row else 0
+        row = execute_query("SELECT sent_count FROM daily_counter WHERE counter_date = %s;", [today_dt], fetch="one")
+        val = row["sent_count"] if row else 0
+        _today_sent_cache["date"] = today_dt
+        _today_sent_cache["val"] = val
+        _today_sent_cache["last_check"] = now_ts
+        return val
     except Exception as e:
         print(f"Error reading daily count: {e}")
-        return 0
+        return _today_sent_cache["val"]
 
 def get_sender_today_sent(sender_email):
     try:
@@ -190,15 +200,17 @@ def get_sender_today_sent(sender_email):
         print(f"Error reading sender daily count: {e}")
         return 0
 
-
 def increment_counter():
     try:
-        # Check if date exists
-        row = execute_query("SELECT sent_count FROM daily_counter WHERE counter_date = %s;", [date.today()], fetch="one")
+        today_dt = date.today()
+        row = execute_query("SELECT sent_count FROM daily_counter WHERE counter_date = %s;", [today_dt], fetch="one")
         if row:
-            execute_query("UPDATE daily_counter SET sent_count = sent_count + 1 WHERE counter_date = %s;", [date.today()])
+            execute_query("UPDATE daily_counter SET sent_count = sent_count + 1 WHERE counter_date = %s;", [today_dt])
         else:
-            execute_query("INSERT INTO daily_counter (counter_date, sent_count) VALUES (%s, 1);", [date.today()])
+            execute_query("INSERT INTO daily_counter (counter_date, sent_count) VALUES (%s, 1);", [today_dt])
+        _today_sent_cache["date"] = today_dt
+        _today_sent_cache["val"] += 1
+        _today_sent_cache["last_check"] = time.time()
     except Exception as e:
         print(f"Counter increment error: {e}")
 
