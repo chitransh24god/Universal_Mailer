@@ -2083,25 +2083,74 @@ select.form-control {
                 const response = await fetch('/api/senders');
                 sendersList = await response.json();
                 
-                const assocSel = document.getElementById('tmpl-sender-assoc');
                 const mapSel = document.getElementById('map-sender-select');
                 const trSenderFilter = document.getElementById('tr-sender-filter');
                 
                 let opts = sendersList.map(s => `<option value="${s.email}">${s.display_name} &lt;${s.email}&gt;</option>`).join('');
                 if (!opts) opts = `<option value="">No senders configured</option>`;
                 
-                if (assocSel) assocSel.innerHTML = `<option value="">Generic (All Senders)</option>` + opts;
                 if (mapSel) mapSel.innerHTML = opts;
                 if (trSenderFilter) {
                     trSenderFilter.innerHTML = `<option value="">All Senders</option>` + opts;
                 }
                 
+                // Rebuild template assoc dropdown (includes groups) after senders load
+                rebuildTemplateAssocDropdown();
+                rebuildMapSenderDropdown();
+
                 updateLaunchSenderDropdown();
                 renderGroupMembersChecklist();
                 checkGmailWarning();
             } catch (err) {
                 console.error("Error loading senders:", err);
             }
+        }
+
+        function rebuildTemplateAssocDropdown() {
+            const assocSel = document.getElementById('tmpl-sender-assoc');
+            if (!assocSel) return;
+            let html = `<option value="">Generic (All Senders)</option>`;
+            // Groups at top
+            if (senderGroupsList && senderGroupsList.length > 0) {
+                html += `<optgroup label="👥 Sender Groups">`;
+                senderGroupsList.forEach(g => {
+                    html += `<option value="group:${g.id}">👥 Group: ${g.group_name} (${g.member_emails.length} accounts)</option>`;
+                });
+                html += `</optgroup>`;
+            }
+            // Individual senders below
+            if (sendersList && sendersList.length > 0) {
+                html += `<optgroup label="📧 Individual Senders">`;
+                sendersList.forEach(s => {
+                    html += `<option value="${s.email}">${s.display_name} &lt;${s.email}&gt;</option>`;
+                });
+                html += `</optgroup>`;
+            }
+            assocSel.innerHTML = html;
+        }
+
+        function rebuildMapSenderDropdown() {
+            const mapSel = document.getElementById('map-sender-select');
+            if (!mapSel) return;
+            let html = '';
+            // Groups at top
+            if (senderGroupsList && senderGroupsList.length > 0) {
+                html += `<optgroup label="👥 Sender Groups">`;
+                senderGroupsList.forEach(g => {
+                    html += `<option value="group:${g.id}">👥 Group: ${g.group_name}</option>`;
+                });
+                html += `</optgroup>`;
+            }
+            // Individual senders
+            if (sendersList && sendersList.length > 0) {
+                html += `<optgroup label="📧 Individual Senders">`;
+                sendersList.forEach(s => {
+                    html += `<option value="${s.email}">${s.display_name} &lt;${s.email}&gt;</option>`;
+                });
+                html += `</optgroup>`;
+            }
+            if (!html) html = `<option value="">No senders configured</option>`;
+            mapSel.innerHTML = html;
         }
 
         function checkGmailWarning() {
@@ -3525,6 +3574,9 @@ select.form-control {
                 renderSenderGroupsList();
                 renderGroupMembersChecklist();
                 updateLaunchSenderDropdown();
+                rebuildTemplateAssocDropdown(); // keep template assoc dropdown in sync with groups
+                rebuildMapSenderDropdown();      // keep map-templates sender dropdown in sync
+
             } catch (e) {
                 console.error("Error loading sender groups:", e);
             }
