@@ -1221,6 +1221,19 @@ def poll_replies():
                             if rid in our_msgs:
                                 matched_token = our_msgs[rid]
                                 break
+                        
+                        # Fallback match by recipient email address if Message-ID is missing or modified
+                        if not matched_token and from_email:
+                            clean_from = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', from_email)
+                            if clean_from:
+                                sender_clean_from = clean_from[0].lower()
+                                match_row = execute_query(
+                                    "SELECT track_token FROM sent_emails WHERE LOWER(to_email) = %s ORDER BY id DESC LIMIT 1;",
+                                    [sender_clean_from],
+                                    fetch="one"
+                                )
+                                if match_row:
+                                    matched_token = match_row["track_token"]
                                     
                         from_lower = from_email.lower()
                         is_bounce = any(x in from_lower for x in [
