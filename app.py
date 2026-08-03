@@ -571,7 +571,240 @@ def make_campaign_state(sender_email="", category="", timezone="Asia/Kolkata", s
         "working_days": str(working_days)
     }
 
+
+# ── Parallel Group Campaign Runner ──────────────────────────────────────────────
+def run_group_campaign_parallel(df, email_col, email_subject, template_text, sender_email, sender_name,
+                                 campaign_id, category, base_url, campaign_name,
+                                 group_members, group_info, timezone, start_hour, end_hour, working_days, start_row=0):
+    """
+    Parallel sender for group campaigns.
+    Each account in the group gets its OWN worker thread.
+    All workers pull rows from a shared thread-safe queue simultaneously.
+    → With N accounts, campaign runs ~N times faster than sequential sending.
+    """
+    import secrets
+    import queue as _queue
+
+    total = len(df)
+    daily_limit_group = group_info.get("daily_limit_per_account", 250) if group_info else 250
+
+    # Build shared queue of (original_index, row) for all valid rows >= start_row
+    row_queue = _queue.Queue()
+    for idx, row in df.iterrows():
+        if idx >= start_row:
+            row_queue.put((idx, row))
+
+    # Shared atomic counter for current_row progress (thread-safe via lock)
+    progress_lock = threading.Lock()
+    rows_done = [start_row]  # mutable list so threads can update it
+
+    # Fetch admin reply receiver once (not per-email)
+    try:
+        admin_receiver_row = execute_query("SELECT value FROM global_settings WHERE key='reply_receiver_id';", fetch="one")
+        admin_receiver = admin_receiver_row["value"] if admin_receiver_row and admin_receiver_row["value"] else "admin@mybankloan.ai"
+    except Exception:
+        admin_receiver = "admin@mybankloan.ai"
+
+    def worker(sc):
+        """Worker thread for one sender account."""
+        acct_email = sc["email"]
+        acct_name = sc.get("display_name") or sender_name
+        provider_type = sc.get("provider_type", "brevo").lower()
+        delay_min = sc.get("delay_min") if sc.get("delay_min") is not None else DELAY_MIN_SECS
+        delay_max = sc.get("delay_max") if sc.get("delay_max") is not None else DELAY_MAX_SECS
+        api_key = sc.get("api_key", "")
+        daily_limit = sc.get("daily_limit") or daily_limit_group
+        import secrets as _sec
+
+        while True:
+            # Check cancellation
+            with campaigns_lock:
+                if campaign_id in campaigns and campaigns[campaign_id].get("cancelled"):
+                    return
+
+            # Working hours check
+            if not is_working_hours(campaign_id):
+                secs = secs_until_work(campaign_id)
+                add_log(f"[{acct_email}] Outside working hours. Sleeping {secs//3600}h {(secs%3600)//60}m.", campaign_id)
+                with campaigns_lock:
+                    if campaign_id in campaigns:
+                        campaigns[campaign_id]["paused"] = True
+                if interruptible_sleep(secs + 5, campaign_id):
+                    return
+                with campaigns_lock:
+                    if campaign_id in campaigns:
+                        campaigns[campaign_id]["paused"] = False
+
+            # Daily limit check for this account
+            acct_sent = get_sender_today_sent(acct_email)
+            if acct_sent >= daily_limit:
+                add_log(f"[{acct_email}] Daily limit {daily_limit} reached. This worker is done for today.", campaign_id)
+                return  # This account is done; other accounts continue
+
+            # Pull next email row from shared queue
+            try:
+                idx, row = row_queue.get(block=False)
+            except _queue.Empty:
+                return  # No more rows
+
+            customer_email = str(row.get(email_col, row.get('Email', ''))).strip()
+
+            # Skip empty rows
+            if not customer_email or customer_email.lower() in ('nan', 'none', ''):
+                row_queue.task_done()
+                with progress_lock:
+                    rows_done[0] += 1
+                    with campaigns_lock:
+                        if campaign_id in campaigns:
+                            campaigns[campaign_id]["current_row"] = rows_done[0]
+                continue
+
+            # MX domain check
+            if not check_domain_mx(customer_email):
+                add_log(f"[{idx+1}/{total}] BOUNCED {customer_email} ({category}): Invalid Domain", campaign_id)
+                row_dict = {str(k).strip(): str(v).strip() for k, v in row.to_dict().items()}
+                body, subject = personalize_body(template_text, email_subject, row_dict)
+                track_token = _sec.token_urlsafe(16)
+                try:
+                    execute_query(
+                        """INSERT INTO sent_emails
+                           (track_token, sender_email, to_email, company_name, owner_name, subject, message_id, campaign_name, bounced, bounced_at)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s, TRUE, NOW()) ON CONFLICT DO NOTHING;""",
+                        [track_token, acct_email, customer_email,
+                         row_dict.get('Company Name', ''), row_dict.get('Owner Name', ''), subject, "mx-failed", campaign_name]
+                    )
+                except Exception:
+                    pass
+                row_queue.task_done()
+                with progress_lock:
+                    rows_done[0] += 1
+                    with campaigns_lock:
+                        if campaign_id in campaigns:
+                            campaigns[campaign_id]["current_row"] = rows_done[0]
+                continue
+
+            row_dict = {str(k).strip(): str(v).strip() for k, v in row.to_dict().items()}
+            body, subject = personalize_body(template_text, email_subject, row_dict)
+            track_token = _sec.token_urlsafe(16)
+            html_body = make_html_body_tracked(body, track_token, base_url=base_url)
+            success = False
+            msg_id = ""
+
+            if provider_type == "smtp":
+                success, result = send_via_custom_smtp(
+                    to_email=customer_email, subject=subject,
+                    html_body=html_body, plain_body=body,
+                    sender_email=acct_email, sender_name=acct_name,
+                    config=sc
+                )
+                if success:
+                    msg_id = result
+                else:
+                    add_log(f"[{idx+1}/{total}] FAIL SMTP {customer_email} via {acct_email}: {result}", campaign_id)
+            else:
+                reply_email = admin_receiver if "mybankloan.ai" in acct_email.lower() else acct_email
+                payload = {
+                    "sender": {"name": acct_name, "email": acct_email},
+                    "to": [{"email": customer_email}],
+                    "subject": subject,
+                    "htmlContent": html_body,
+                    "textContent": body,
+                    "replyTo": {"email": reply_email, "name": acct_name},
+                }
+                try:
+                    resp = requests.post(
+                        BREVO_API_URL, json=payload,
+                        headers={"accept": "application/json", "content-type": "application/json", "api-key": api_key},
+                        timeout=30
+                    )
+                    if resp.status_code in (200, 201):
+                        success = True
+                        msg_id = resp.json().get("messageId", "")
+                    else:
+                        try:
+                            err = resp.json().get("message", resp.text[:100])
+                        except Exception:
+                            err = resp.text[:100]
+                        add_log(f"[{idx+1}/{total}] FAIL {customer_email} via {acct_email}: {resp.status_code} {err}", campaign_id)
+                except Exception as e:
+                    add_log(f"[{idx+1}/{total}] ERROR {customer_email} via {acct_email}: {e}", campaign_id)
+
+            owner = row_dict.get('Owner Name', row_dict.get('Company Name', ''))
+            if success:
+                increment_counter()
+                new_sent = get_today_sent()
+                add_log(f"[{idx+1}/{total}] OK {customer_email} ({owner}) via {acct_email} [{category}] | Today: {new_sent}", campaign_id)
+                try:
+                    execute_query(
+                        """INSERT INTO sent_emails
+                           (track_token, sender_email, to_email, company_name, owner_name, subject, message_id, campaign_name, bounced)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s, FALSE) ON CONFLICT DO NOTHING;""",
+                        [track_token, acct_email, customer_email,
+                         row_dict.get('Company Name', ''), row_dict.get('Owner Name', ''), subject, msg_id, campaign_name]
+                    )
+                except Exception as te:
+                    print(f"Track save error: {te}")
+            else:
+                try:
+                    execute_query(
+                        """INSERT INTO sent_emails
+                           (track_token, sender_email, to_email, company_name, owner_name, subject, message_id, campaign_name, bounced, bounced_at)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s, TRUE, NOW()) ON CONFLICT DO NOTHING;""",
+                        [track_token, acct_email, customer_email,
+                         row_dict.get('Company Name', ''), row_dict.get('Owner Name', ''), subject, msg_id, campaign_name]
+                    )
+                except Exception as te:
+                    print(f"Failed email track save error: {te}")
+
+            row_queue.task_done()
+            with progress_lock:
+                rows_done[0] += 1
+                with campaigns_lock:
+                    if campaign_id in campaigns:
+                        campaigns[campaign_id]["current_row"] = rows_done[0]
+
+            try:
+                execute_query("UPDATE active_campaigns SET current_row=%s WHERE campaign_id=%s;", [rows_done[0], campaign_id])
+            except Exception:
+                pass
+
+            # Each worker sleeps its own delay — others continue sending in parallel!
+            delay = random.randint(int(delay_min), int(delay_max))
+            if interruptible_sleep(delay, campaign_id):
+                return
+
+    # Launch one worker thread per group member
+    threads = []
+    add_log(f"🚀 Group campaign starting with {len(group_members)} parallel workers!", campaign_id)
+    for sc in group_members:
+        t = threading.Thread(target=worker, args=(sc,), daemon=True)
+        t.start()
+        threads.append(t)
+
+    # Wait for all workers to finish
+    for t in threads:
+        t.join()
+
+    with campaigns_lock:
+        was_cancelled = campaign_id in campaigns and campaigns[campaign_id].get("cancelled")
+
+    if was_cancelled:
+        add_log(f"Group campaign stopped/cancelled ({category})!", campaign_id)
+    else:
+        add_log(f"✅ Group campaign completed ({category})! All {len(group_members)} accounts finished.", campaign_id)
+
+    with campaigns_lock:
+        if campaign_id in campaigns:
+            campaigns[campaign_id]["running"] = False
+
+    try:
+        execute_query("DELETE FROM active_campaigns WHERE campaign_id=%s;", [campaign_id])
+    except Exception as e:
+        print(f"Failed to delete active campaign: {e}")
+
+
 def run_campaign(df_dict, email_subject, template_text, email_col, sender_email, sender_name, campaign_id, category, base_url="", custom_campaign_name="", timezone="Asia/Kolkata", start_hour=10, end_hour=19, working_days="0,1,2,3,4,5", start_row=0):
+
     import secrets
     df = pd.DataFrame(df_dict)
     if 'Email' in df.columns:
@@ -639,6 +872,24 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
             with campaigns_lock:
                 campaigns[campaign_id]["running"] = False
             return
+    else:
+        # ── GROUP CAMPAIGN: run in parallel (one thread per account) ──
+        if not group_members:
+            add_log(f"ERROR: Sender group has no active member accounts!", campaign_id)
+            with campaigns_lock:
+                campaigns[campaign_id]["running"] = False
+            return
+        run_group_campaign_parallel(
+            df=df, email_col=email_col, email_subject=email_subject,
+            template_text=template_text, sender_email=sender_email,
+            sender_name=sender_name, campaign_id=campaign_id, category=category,
+            base_url=base_url, campaign_name=campaign_name,
+            group_members=group_members, group_info=group_info,
+            timezone=timezone, start_hour=start_hour, end_hour=end_hour,
+            working_days=working_days, start_row=start_row
+        )
+        return  # parallel runner handles cleanup — don't continue below
+
 
     consecutive_empty = 0
     rr_index = 0
@@ -646,6 +897,7 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
     for index, row in df.iterrows():
         if index < start_row:
             continue
+
             
         # Check if campaign was cancelled
         with campaigns_lock:
