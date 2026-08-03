@@ -813,7 +813,9 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
             with campaigns_lock:
                 campaigns[campaign_id]["current_row"] = index + 1
             owner = row_dict.get('Owner Name', row_dict.get('Company Name', ''))
-            add_log(f"[{index+1}/{total}] OK {customer_email} ({owner}) [{category}] | Today: {new_sent}/{daily_limit}", campaign_id)
+            # daily_limit may not be defined for group campaigns - use a safe fallback
+            _dl = daily_limit if not is_group else (group_info.get("daily_limit_per_account", 250) if group_info else 250)
+            add_log(f"[{index+1}/{total}] OK {customer_email} ({owner}) [{category}] | Today: {new_sent}/{_dl}", campaign_id)
             try:
                 execute_query(
                     """INSERT INTO sent_emails
@@ -2323,7 +2325,9 @@ async def cancel_campaign(request: Request):
                     campaigns[cid]["cancelled"] = True
                     campaigns[cid]["running"] = False
                     campaigns[cid]["paused"] = False
-                    add_log(f"Campaign cancelled & stopped for {cid}", cid)
+        # add_log MUST be called OUTSIDE campaigns_lock to prevent deadlock!
+        for cid in target_cids:
+            add_log(f"Campaign cancelled & stopped for {cid}", cid)
 
         # Instantly delete from PostgreSQL active_campaigns table
         try:
