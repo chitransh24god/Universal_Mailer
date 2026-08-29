@@ -1263,6 +1263,14 @@ def poll_replies():
     if not accounts:
         return
         
+    # Fetch recently sent emails (last 30 days) ONCE for all accounts
+    try:
+        sent_rows = execute_query("SELECT message_id, track_token FROM sent_emails WHERE message_id IS NOT NULL AND message_id != '' AND sent_at >= NOW() - INTERVAL '30 days';", fetch="all")
+        our_msgs = {r["message_id"].strip("<>"): r["track_token"] for r in sent_rows if r["message_id"]} if sent_rows else {}
+    except Exception as e:
+        print(f"[IMAP] Error preloading sent message IDs: {e}")
+        our_msgs = {}
+
     for acc in accounts:
         sender_email = acc["email"]
         imap_host = acc["imap_host"]
@@ -1274,7 +1282,7 @@ def poll_replies():
             
         try:
             old_to = socket.getdefaulttimeout()
-            socket.setdefaulttimeout(15)
+            socket.setdefaulttimeout(10)
             print(f"[IMAP] Connecting {sender_email} -> {imap_host}:{imap_port}")
             
             import ssl
@@ -1282,16 +1290,9 @@ def poll_replies():
             mail = imaplib.IMAP4_SSL(imap_host, int(imap_port), ssl_context=context)
             mail.login(sender_email, imap_pass)
             socket.setdefaulttimeout(old_to)
-
-            
-            mail.select("INBOX")
-            
-            # Fetch recently sent emails to match replies against
-            sent_rows = execute_query("SELECT message_id, track_token FROM sent_emails WHERE message_id IS NOT NULL AND message_id != '';", fetch="all")
-            our_msgs = {r["message_id"].strip("<>"): r["track_token"] for r in sent_rows if r["message_id"]} if sent_rows else {}
             
             _, select_data = mail.select("INBOX")
-            total_emails = int(select_data[0])
+            total_emails = int(select_data[0]) if select_data and select_data[0] else 0
             print(f"[IMAP] {sender_email} — Total emails: {total_emails}")
             
             if total_emails > 0:
@@ -1533,7 +1534,7 @@ def background_tracker():
             check_scheduled_campaigns()
         except Exception as e:
             print(f"[Scheduler error] {e}")
-        time.sleep(30)
+        time.sleep(120)
 
 
 @app.on_event("startup")
