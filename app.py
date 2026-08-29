@@ -39,6 +39,10 @@ from analyzer import analyze_email
 
 app = FastAPI()
 
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
 IST = pytz.timezone("Asia/Kolkata")
 DAILY_LIMIT = 1500  # Default fallback global limit
 DELAY_MIN_SECS = 60
