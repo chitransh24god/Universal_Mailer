@@ -853,6 +853,13 @@ select.form-control {
         Email Tracking
       </button>
 
+      <div class="nav-section-label" style="margin-top:12px;">Team & CRM</div>
+
+      <button class="nav-btn" id="nav-crm" onclick="switchTab('crm',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        Team CRM & Tasks
+      </button>
+
       <div class="nav-section-label" style="margin-top:12px;">System</div>
 
       <button class="nav-btn" id="nav-settings" onclick="switchTab('settings',this)">
@@ -1595,6 +1602,140 @@ select.form-control {
 
       </div><!-- /tab-tracking -->
 
+      <!-- ═══════════════════ TAB: CRM & TEAM TASKS ═══════════════════ -->
+      <div id="tab-crm" class="tab-pane">
+        <div class="card mb-16" style="background:linear-gradient(135deg, rgba(99,102,241,0.1), rgba(168,85,247,0.05));border:1px solid rgba(99,102,241,0.2);">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+            <div>
+              <div style="font-size:18px;font-weight:800;color:var(--text-primary);">👥 Team CRM, Access Control & Task Assignment</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">
+                Manage team users, assign specific Sender Email Accounts & Groups, and assign campaign dispatches & tasks.
+              </div>
+            </div>
+            <div id="crm-role-status-badge">
+              <span class="badge badge-running">👑 Super Admin View</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="align-items:start;">
+
+          <!-- LEFT: USER ACCOUNTS & SENDER SCOPING -->
+          <div>
+            <!-- Add User Form (Admin Only) -->
+            <div class="card mb-16" id="crm-add-user-card">
+              <div class="card-header">
+                <div class="card-title">👤 + Add New Team User</div>
+                <span class="badge badge-idle">RBAC Access Control</span>
+              </div>
+              
+              <div class="grid-2" style="gap:10px;">
+                <div>
+                  <label class="form-label" style="font-size:11px;">Username *</label>
+                  <input type="text" id="crm-username" class="form-control" placeholder="e.g. john_sales">
+                </div>
+                <div>
+                  <label class="form-label" style="font-size:11px;">Email Address *</label>
+                  <input type="email" id="crm-email" class="form-control" placeholder="john@company.com">
+                </div>
+              </div>
+              <div class="grid-2" style="gap:10px;margin-top:8px;">
+                <div>
+                  <label class="form-label" style="font-size:11px;">Password *</label>
+                  <input type="password" id="crm-password" class="form-control" placeholder="Set password">
+                </div>
+                <div>
+                  <label class="form-label" style="font-size:11px;">Role *</label>
+                  <select id="crm-role" class="form-control">
+                    <option value="user">Standard User (Scoped Access)</option>
+                    <option value="admin">Super Admin (Full Access)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top:10px;margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                  <label class="form-label" style="font-size:11px;margin:0;">Assign Sender Accounts & Groups *</label>
+                  <button type="button" class="btn btn-ghost btn-sm" onclick="reloadCrmChecklist()" style="font-size:11px;padding:2px 6px;">🔄 Reload Accounts</button>
+                </div>
+                <div id="crm-senders-checklist" style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:8px;background:var(--surface);">
+                  <div class="text-muted text-xs">Loading accounts…</div>
+                </div>
+              </div>
+
+              <button class="btn btn-primary btn-sm mt-8" onclick="createCrmUser()">+ Create User & Assign Access</button>
+              <div id="crm-status-msg" style="margin-top:6px;font-size:12px;"></div>
+            </div>
+
+            <!-- Existing Team Users List -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">👥 Team Members & Permissions</div>
+              </div>
+              <div id="crm-users-list" style="display:flex;flex-direction:column;gap:8px;">
+                <div class="text-muted text-xs">Loading team users…</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: TASK ASSIGNMENT & WORK QUEUE -->
+          <div>
+            <!-- Create Task Form (Admin Only) -->
+            <div class="card mb-16" id="crm-add-task-card">
+              <div class="card-header">
+                <div class="card-title">📋 + Assign Campaign Task</div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" style="font-size:11px;">Assign To User *</label>
+                <select id="task-user-select" class="form-control">
+                  <option value="">Select Team User...</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" style="font-size:11px;">Task Title / Instructions *</label>
+                <input type="text" id="task-title-input" class="form-control" placeholder="e.g. Run 500 loans campaign using Business Loan template">
+              </div>
+
+              <div class="grid-2" style="gap:10px;">
+                <div>
+                  <label class="form-label" style="font-size:11px;">Target Sender ID / Group</label>
+                  <select id="task-sender-select" class="form-control"></select>
+                </div>
+                <div>
+                  <label class="form-label" style="font-size:11px;">Priority</label>
+                  <select id="task-priority-select" class="form-control">
+                    <option value="normal">⚡ Normal Priority</option>
+                    <option value="high">🔥 High Priority</option>
+                    <option value="low">💤 Low Priority</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top:8px;">
+                <label class="form-label" style="font-size:11px;">Notes / Excel File Instructions</label>
+                <textarea id="task-notes-input" class="form-control" rows="2" placeholder="e.g. Use the March_Leads.xlsx file in shared drive..."></textarea>
+              </div>
+
+              <button class="btn btn-primary btn-sm" onclick="createCrmTask()">+ Assign Task To User</button>
+              <div id="task-status-msg" style="margin-top:6px;font-size:12px;"></div>
+            </div>
+
+            <!-- Task Queue Board -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">📌 Assigned Tasks Queue</div>
+                <button class="btn btn-ghost btn-sm" onclick="loadCrmTasks()">🔄 Refresh Tasks</button>
+              </div>
+              <div id="crm-tasks-list" style="display:flex;flex-direction:column;gap:8px;">
+                <div class="text-muted text-xs">Loading assigned tasks…</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /tab-crm -->
 
       <!-- ════════════════════════════════════════════════ -->
       <!--  TAB: SETTINGS                                   -->
@@ -1798,14 +1939,11 @@ select.form-control {
               <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
                 <div style="font-size:12px;font-weight:600;margin-bottom:8px;">Active Sender Groups</div>
                 <div id="settings-groups-list" style="display:flex;flex-direction:column;gap:6px;">
-                  <div class="text-muted text-xs">No sender groups created.</div>
-                </div>
               </div>
             </div>
 
-          </div>
-
-        </div>
+          </div><!-- /right-column -->
+        </div><!-- /grid-settings -->
       </div><!-- /tab-settings -->
 
     </div><!-- /page-body -->
@@ -1975,13 +2113,14 @@ select.form-control {
 
         // ── DASHBOARD KPIs ────────────────────────────────
         async function loadDashboardData() {
+            const pwd = getPwd();
             try {
-                const actResp = await fetch('/api/activity-chart');
+                const actResp = await fetch('/api/activity-chart?pwd=' + encodeURIComponent(pwd));
                 const actData = await actResp.json();
                 renderActivityChart(actData);
             } catch(e) { console.log('Activity chart:', e); }
             try {
-                const r = await fetch('/api/tracking-summary');
+                const r = await fetch('/api/tracking-summary?pwd=' + encodeURIComponent(pwd));
                 const data = await r.json();
                 const total = data.total_sent || 0;
                 const opened = data.total_opened || 0;
@@ -2001,14 +2140,14 @@ select.form-control {
             } catch(e) { console.log('Dashboard KPI load:', e); }
 
             try {
-                const sr = await fetch('/api/senders');
+                const sr = await fetch('/api/senders?pwd=' + encodeURIComponent(pwd));
                 const senders = await sr.json();
                 const qList = document.getElementById('sender-quota-list');
                 if (qList && senders.length) {
                     senders.sort((a,b) => (b.sent_today||0) - (a.sent_today||0));
                     qList.innerHTML = senders.map(s => {
                         const sent = s.sent_today || 0;
-                        const limit = 300;
+                        const limit = s.daily_limit || 300;
                         const pct = Math.min(100, Math.round((sent / limit) * 100));
                         const color = pct >= 100 ? '#dc2626' : pct >= 75 ? '#d97706' : '#059669';
                         return `<div>
@@ -2022,12 +2161,12 @@ select.form-control {
                         </div>`;
                     }).join('');
                 } else if (qList) {
-                    qList.innerHTML = '<div class="text-muted text-sm">No senders configured</div>';
+                    qList.innerHTML = '<div class="text-muted text-sm">No senders assigned</div>';
                 }
             } catch(e) { console.log('Sender quota:', e); }
 
             try {
-                const cr = await fetch('/api/campaign-history');
+                const cr = await fetch('/api/campaign-history?pwd=' + encodeURIComponent(pwd));
                 const camps = await cr.json();
                 const cList = document.getElementById('recent-campaigns-list');
                 if (cList && camps.length) {
@@ -2045,7 +2184,7 @@ select.form-control {
             } catch(e) { console.log('Campaign history:', e); }
 
             try {
-                const tr = await fetch('/tracking-stats?filter=all&limit=1000');
+                const tr = await fetch('/tracking-stats?filter=all&limit=1000&pwd=' + encodeURIComponent(pwd));
                 const tdata = await tr.json();
                 const rows = tdata.emails || [];
                 const tmap = {};
@@ -2071,16 +2210,83 @@ select.form-control {
             } catch(e) { console.log('Top templates:', e); }
         }
 
+        // ── CRM USER & RBAC IDENTITIES ────────────────────
+        let currentUser = null;
+
+        async function initUserIdentity() {
+            const pwd = getPwd();
+            try {
+                const res = await fetch('/api/me?pwd=' + encodeURIComponent(pwd));
+                if (res.ok) {
+                    currentUser = await res.json();
+                    renderUserIdentityUI();
+                }
+            } catch (e) {
+                console.error("User identity fetch error:", e);
+            }
+        }
+
+        function renderUserIdentityUI() {
+            if (!currentUser) return;
+            const isAdmin = currentUser.role === 'admin';
+            const fn = document.querySelector('.footer-name');
+            const fa = document.querySelector('.footer-avatar');
+            const fs = document.querySelector('.footer-status');
+            const topSub = document.querySelector('.topbar-sub');
+
+            if (fn) fn.textContent = currentUser.username;
+            if (fa) fa.textContent = (currentUser.username || 'U')[0].toUpperCase();
+            if (fs) fs.textContent = isAdmin ? '👑 Admin' : '👤 Standard User';
+            if (topSub) topSub.textContent = `Welcome back, ${currentUser.username}` + (!isAdmin ? ` (${currentUser.access.length} IDs assigned)` : '');
+
+            // Sidebar Scoping: Hide CRM & Settings for Standard Users
+            const navCrm = document.getElementById('nav-crm');
+            const navSettings = document.getElementById('nav-settings');
+            const crmLabel = navCrm?.previousElementSibling;
+            const settingsLabel = navSettings?.previousElementSibling;
+
+            if (navCrm) navCrm.style.display = isAdmin ? 'flex' : 'none';
+            if (crmLabel) crmLabel.style.display = isAdmin ? 'block' : 'none';
+            if (navSettings) navSettings.style.display = isAdmin ? 'flex' : 'none';
+            if (settingsLabel) settingsLabel.style.display = isAdmin ? 'block' : 'none';
+
+            // Auto-redirect standard user away from restricted tabs
+            const activeNav = document.querySelector('.nav-btn.active');
+            if (!isAdmin && (activeNav?.id === 'nav-crm' || activeNav?.id === 'nav-settings')) {
+                switchTab('dashboard', document.getElementById('nav-dashboard'));
+            }
+
+            const badge = document.getElementById('crm-role-status-badge');
+            if (badge) {
+                badge.innerHTML = isAdmin ?
+                    '<span class="badge badge-running">👑 Super Admin View (Full Access)</span>' :
+                    `<span class="badge badge-idle">👤 Standard User (${currentUser.access.length} IDs Assigned)</span>`;
+            }
+
+            const addUsrCard = document.getElementById('crm-add-user-card');
+            const addTaskCard = document.getElementById('crm-add-task-card');
+            if (addUsrCard) addUsrCard.style.display = isAdmin ? 'block' : 'none';
+            if (addTaskCard) addTaskCard.style.display = isAdmin ? 'block' : 'none';
+
+            loadCrmTasks();
+            if (isAdmin) {
+                loadUsers();
+                reloadCrmChecklist();
+            }
+        }
+
         // ── LAUNCH CAMPAIGN & INITIAL DATA ────────────────
         async function initData() {
+            await initUserIdentity();
             await loadSenders();
             filterTemplatesBySender();
             startPolling();
         }
 
         async function loadSenders() {
+            const pwd = getPwd();
             try {
-                const response = await fetch('/api/senders');
+                const response = await fetch('/api/senders?pwd=' + encodeURIComponent(pwd));
                 sendersList = await response.json();
                 
                 const mapSel = document.getElementById('map-sender-select');
@@ -2100,6 +2306,7 @@ select.form-control {
 
                 updateLaunchSenderDropdown();
                 renderGroupMembersChecklist();
+                renderCrmUserChecklist();
                 checkGmailWarning();
             } catch (err) {
                 console.error("Error loading senders:", err);
@@ -2166,10 +2373,11 @@ select.form-control {
         async function filterTemplatesBySender() {
             const sender = document.getElementById('launch-sender').value;
             const categorySelect = document.getElementById('launch-category');
+            const pwd = getPwd();
             checkGmailWarning();
             
             try {
-                const response = await fetch(`/templates-by-sender?sender=${encodeURIComponent(sender)}`);
+                const response = await fetch(`/templates-by-sender?sender=${encodeURIComponent(sender)}&pwd=${encodeURIComponent(pwd)}`);
                 const data = await response.json();
                 
                 let opts = data.map(t => `<option value="${t.category}">${t.category}</option>`).join('');
@@ -2190,7 +2398,8 @@ select.form-control {
 
         async function fetchStatus() {
             try {
-                const response = await fetch('/status');
+                const pwd = getPwd();
+                const response = await fetch('/status?pwd=' + encodeURIComponent(pwd));
                 const data = await response.json();
                 
                 document.getElementById('stat-sent').textContent = data.sent_today;
@@ -2331,8 +2540,9 @@ select.form-control {
 
         // ── TEMPLATE MANAGEMENT ───────────────────────────
         async function loadTemplates() {
+            const pwd = getPwd();
             try {
-                const response = await fetch('/templates-list-full');
+                const response = await fetch('/templates-list-full?pwd=' + encodeURIComponent(pwd));
                 templatesList = await response.json();
                 
                 const container = document.getElementById('templates-list-container');
@@ -2562,6 +2772,7 @@ select.form-control {
 
         async function loadTracking(filter) {
             currentFilter = filter;
+            const pwd = getPwd();
             
             ['all','opened','replied','not_opened','alert_48h','bounced'].forEach(f => {
                 const btn = document.getElementById('tr-btn-' + f);
@@ -2581,7 +2792,7 @@ select.form-control {
                 const sender   = document.getElementById('tr-sender-filter')?.value || '';
                 const cmp      = cmpSelectedValue || '';
 
-                const url = `/tracking-stats?filter=${filter}&limit=500` +
+                const url = `/tracking-stats?filter=${filter}&limit=500&pwd=` + encodeURIComponent(pwd) +
                     (dateFrom ? `&date_from=${dateFrom}` : '') +
                     (dateTo   ? `&date_to=${dateTo}`     : '') +
                     (sender   ? `&sender=${encodeURIComponent(sender)}` : '') +
@@ -2681,14 +2892,15 @@ select.form-control {
 
         async function loadPerSenderBreakdown(dateFrom, dateTo) {
             const tbody = document.getElementById('per-sender-table-body');
-            const cmp = document.getElementById('track-campaign-filter').value;
+            const cmp = document.getElementById('track-campaign-filter')?.value || '';
+            const pwd = getPwd();
             try {
-                let url = '/tracking-per-sender';
+                let url = '/tracking-per-sender?pwd=' + encodeURIComponent(pwd);
                 const params = [];
                 if (dateFrom) params.push('date_from=' + dateFrom);
                 if (dateTo)   params.push('date_to='   + dateTo);
                 if (cmp)      params.push('campaign_name=' + encodeURIComponent(cmp));
-                if (params.length) url += '?' + params.join('&');
+                if (params.length) url += '&' + params.join('&');
                 
                 const resp = await fetch(url);
                 const rows = await resp.json();
@@ -2731,10 +2943,11 @@ select.form-control {
         }
 
         function downloadTracking() {
+            const pwd = getPwd();
             const dateFrom = document.getElementById('tr-date-from')?.value || '';
             const dateTo   = document.getElementById('tr-date-to')?.value   || '';
             const sender   = document.getElementById('tr-sender-filter')?.value || '';
-            let url = `/tracking-download?filter=${currentFilter}`;
+            let url = `/tracking-download?filter=${currentFilter}&pwd=${encodeURIComponent(pwd)}`;
             if (dateFrom) url += `&date_from=${dateFrom}`;
             if (dateTo)   url += `&date_to=${dateTo}`;
             if (sender)   url += `&sender=${encodeURIComponent(sender)}`;
@@ -2743,12 +2956,13 @@ select.form-control {
 
         async function loadPerCampaignBreakdown(dateFrom, dateTo) {
             const tbody = document.getElementById('per-campaign-table-body');
+            const pwd = getPwd();
             try {
-                let url = '/tracking-per-campaign';
+                let url = '/tracking-per-campaign?pwd=' + encodeURIComponent(pwd);
                 const params = [];
                 if (dateFrom) params.push('date_from=' + dateFrom);
                 if (dateTo)   params.push('date_to='   + dateTo);
-                if (params.length) url += '?' + params.join('&');
+                if (params.length) url += '&' + params.join('&');
                 
                 const resp = await fetch(url);
                 const rows = await resp.json();
@@ -2785,10 +2999,11 @@ select.form-control {
         async function loadReplies() {
             const container = document.getElementById('replies-inbox-container');
             if (!container) return;
+            const pwd = getPwd();
             const includeBounces = document.getElementById('show-bounces-chk')?.checked ? 'true' : 'false';
             container.innerHTML = `<div class="text-muted text-sm" style="text-align:center;padding:24px;">Loading replies...</div>`;
             try {
-                const resp = await fetch(`/replies-list?limit=200&include_bounces=${includeBounces}`);
+                const resp = await fetch(`/replies-list?limit=200&include_bounces=${includeBounces}&pwd=${encodeURIComponent(pwd)}`);
                 const data = await resp.json();
                 const replies = data.replies || [];
                 if (replies.length === 0) {
@@ -2930,30 +3145,38 @@ select.form-control {
         }
 
         async function loadSendersSettingsList() {
+            const pwd = getPwd();
             try {
-                const response = await fetch('/api/senders');
+                const response = await fetch('/api/senders?pwd=' + encodeURIComponent(pwd) + '&all_senders=true');
                 const list = await response.json();
+                if (Array.isArray(list)) {
+                    sendersList = list;
+                }
                 
                 const container = document.getElementById('settings-senders-list');
+                if (!container) return;
                 container.innerHTML = list.map(s => {
                     const bounceRate = s.all_time_sent > 0 ? ((s.all_time_bounced / s.all_time_sent) * 100).toFixed(1) : '0.0';
                     const repScore = s.reputation_score !== undefined ? s.reputation_score : (100 - parseFloat(bounceRate)).toFixed(1);
                     const repHealth = s.reputation_health || (repScore >= 95 ? 'Excellent' : repScore >= 85 ? 'Good' : 'Warning');
                     const repColor = repScore >= 95 ? '#10b981' : repScore >= 85 ? '#3b82f6' : repScore >= 70 ? '#f59e0b' : '#ef4444';
                     return `
-                    <div class="sender-item-card">
-                        <div class="sender-item-title">${s.display_name}</div>
-                        <div class="sender-item-subtitle">${s.email} (${s.provider_type.toUpperCase()})</div>
-                        <div class="sender-item-meta">
+                    <div class="sender-item-card" style="padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:start;">
+                            <div>
+                                <div style="font-weight:700;font-size:13px;color:var(--text-primary);">${s.display_name}</div>
+                                <div style="font-size:11px;color:var(--text-muted);">${s.email} (${(s.provider_type || 'smtp').toUpperCase()})</div>
+                            </div>
+                            <div>${s.active ? '<span class="badge badge-idle">Active</span>' : '<span class="badge badge-paused">Inactive</span>'}</div>
+                        </div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;display:flex;flex-wrap:wrap;gap:8px;">
                             <span>Limit: ${s.daily_limit}</span>
                             <span>Delay: ${s.delay_min !== undefined ? s.delay_min : 60}-${s.delay_max !== undefined ? s.delay_max : 120}s</span>
-                            <span style="color: ${bounceRate > 5 ? 'var(--danger)' : 'inherit'}">Bounce Rate: ${bounceRate}%</span>
-                            <span style="font-weight:600; color: ${repColor}">Reputation: ${repScore}% (${repHealth})</span>
-                            <span>Status: ${s.active ? '<span class="text-success">Active</span>' : '<span class="text-danger">Inactive</span>'}</span>
+                            <span style="color: ${bounceRate > 5 ? 'var(--danger)' : 'inherit'}">Bounce: ${bounceRate}%</span>
                         </div>
-                        <div class="sender-item-actions">
-                            <button class="btn btn-secondary btn-sm" onclick="editSenderAccount('${s.email}')">Edit</button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteSenderAccount('${s.email}')">Delete</button>
+                        <div style="display:flex;gap:6px;margin-top:8px;">
+                            <button class="btn btn-ghost btn-sm" onclick="editSenderAccount('${s.email}')" style="color:var(--brand);font-size:11px;padding:2px 8px;">✏️ Edit Account</button>
+                            <button class="btn btn-ghost btn-sm" onclick="deleteSenderAccount('${s.email}')" style="color:var(--danger);font-size:11px;padding:2px 8px;">✕ Delete</button>
                         </div>
                     </div>
                     `;
@@ -3029,14 +3252,28 @@ select.form-control {
             }
         }
 
-        function editSenderAccount(email) {
-            const s = sendersList.find(snd => snd.email === email);
-            if (!s) return;
+        async function editSenderAccount(email) {
+            let s = sendersList ? sendersList.find(snd => snd.email === email) : null;
+            if (!s) {
+                const pwd = getPwd();
+                try {
+                    const res = await fetch('/api/senders?pwd=' + encodeURIComponent(pwd) + '&all_senders=true');
+                    const allSnd = await res.json();
+                    if (Array.isArray(allSnd)) {
+                        sendersList = allSnd;
+                        s = sendersList.find(snd => snd.email === email);
+                    }
+                } catch (e) {}
+            }
+            if (!s) {
+                alert("Account details not found for: " + email);
+                return;
+            }
             
             document.getElementById('snd-email').value = s.email;
             document.getElementById('snd-email').readOnly = true;
-            document.getElementById('snd-display-name').value = s.display_name;
-            document.getElementById('snd-provider').value = s.provider_type;
+            document.getElementById('snd-display-name').value = s.display_name || '';
+            document.getElementById('snd-provider').value = s.provider_type || 'smtp';
             
             document.getElementById('snd-api-key').value = s.api_key || '';
             document.getElementById('snd-smtp-host').value = s.smtp_host || '';
@@ -3045,17 +3282,21 @@ select.form-control {
             document.getElementById('snd-imap-host').value = s.imap_host || '';
             document.getElementById('snd-imap-port').value = s.imap_port || '';
             document.getElementById('snd-imap-pass').value = '';
-            document.getElementById('snd-limit').value = s.daily_limit;
+            document.getElementById('snd-limit').value = s.daily_limit || 1500;
             document.getElementById('snd-delay-min').value = s.delay_min !== undefined ? s.delay_min : 60;
             document.getElementById('snd-delay-max').value = s.delay_max !== undefined ? s.delay_max : 120;
-            document.getElementById('snd-active').checked = s.active;
+            document.getElementById('snd-active').checked = s.active !== false;
             document.getElementById('snd-skip-test').checked = false;
             
-            document.getElementById('sender-form-title').textContent = "Edit Sender: " + s.email;
+            document.getElementById('sender-form-title').textContent = "✏️ Edit Sender: " + s.email;
             document.getElementById('snd-is-edit').value = "true";
             document.getElementById('btn-cancel-edit').style.display = 'block';
             
             toggleProviderSettings();
+            
+            // Scroll smoothly to edit form
+            const formEl = document.getElementById('sender-form-title');
+            if (formEl) formEl.scrollIntoView({ behavior: 'smooth' });
         }
 
         async function deleteSenderAccount(email) {
@@ -3567,18 +3808,194 @@ select.form-control {
         let senderGroupsList = [];
 
         async function loadSenderGroups() {
+            const pwd = getPwd();
             try {
-                const res = await fetch('/api/sender-groups');
+                const res = await fetch('/api/sender-groups?pwd=' + encodeURIComponent(pwd));
                 const data = await res.json();
                 senderGroupsList = data.groups || [];
                 renderSenderGroupsList();
                 renderGroupMembersChecklist();
+                renderCrmUserChecklist();
                 updateLaunchSenderDropdown();
                 rebuildTemplateAssocDropdown(); // keep template assoc dropdown in sync with groups
                 rebuildMapSenderDropdown();      // keep map-templates sender dropdown in sync
 
             } catch (e) {
                 console.error("Error loading sender groups:", e);
+            }
+        }
+
+        // ── CRM USER MANAGEMENT JS (ADMIN ONLY) ────────────────
+        let allCrmUsers = [];
+
+        async function loadUsers() {
+            const pwd = getPwd();
+            try {
+                const res = await fetch('/api/users?pwd=' + encodeURIComponent(pwd));
+                const data = await res.json();
+                allCrmUsers = data.users || [];
+                renderCrmUsersList();
+                renderCrmUserChecklist();
+            } catch (e) {
+                console.error("Error loading CRM users:", e);
+            }
+        }
+
+        function renderCrmUserChecklist() {
+            const box = document.getElementById('crm-senders-checklist');
+            if (!box) return;
+            let html = '';
+            // Sender Groups
+            if (senderGroupsList && senderGroupsList.length > 0) {
+                html += `<div style="font-weight:700;font-size:11px;color:var(--brand);margin-bottom:4px;margin-top:2px;">👥 SENDER GROUPS:</div>`;
+                senderGroupsList.forEach(g => {
+                    html += `
+                    <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px;cursor:pointer;">
+                        <input type="checkbox" name="crm-sender-check" value="group:${g.id}">
+                        <span>👥 <strong>${g.group_name}</strong> (${g.member_emails.length} Accounts)</span>
+                    </label>`;
+                });
+            }
+            // Individual senders
+            if (sendersList && sendersList.length > 0) {
+                html += `<div style="font-weight:700;font-size:11px;color:var(--brand);margin-bottom:4px;margin-top:6px;">📧 INDIVIDUAL ACCOUNTS:</div>`;
+                sendersList.forEach(s => {
+                    html += `
+                    <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px;cursor:pointer;">
+                        <input type="checkbox" name="crm-sender-check" value="${s.email}">
+                        <span><strong>${s.display_name || s.email.split('@')[0]}</strong> (${s.email})</span>
+                    </label>`;
+                });
+            }
+            box.innerHTML = html || `<div class="text-muted text-xs">No senders or groups configured yet.</div>`;
+        }
+
+        function renderCrmUsersList() {
+            const box = document.getElementById('crm-users-list');
+            if (!box) return;
+            if (!allCrmUsers || allCrmUsers.length === 0) {
+                box.innerHTML = `<div class="text-muted text-xs">No team users created yet.</div>`;
+                return;
+            }
+            box.innerHTML = allCrmUsers.map(u => {
+                const isRootAdmin = u.username.toLowerCase() === 'admin' || u.id === 0;
+                const accessBadge = u.role === 'admin' ? '<span class="badge badge-running">All Accounts (Admin)</span>' :
+                    `<span class="badge badge-idle">${u.access.length} Accounts/Groups Assigned</span>`;
+                return `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">
+                    <div>
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                            <span style="font-weight:700;font-size:13px;color:var(--text-primary);">${u.username}</span>
+                            <span style="font-size:11px;color:var(--text-muted);">&lt;${u.email}&gt;</span>
+                            ${accessBadge}
+                        </div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">
+                            ${u.access.length > 0 && u.role !== 'admin' ? `Assigned: ${u.access.join(', ')}` : ''}
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        ${!isRootAdmin && u.role !== 'admin' ? `<button class="btn btn-ghost btn-sm" onclick="editCrmUserAccess(${u.id})" title="Edit Sender Access" style="color:var(--brand);font-size:11px;">⚙️ Edit Access</button>` : ''}
+                        ${!isRootAdmin ? `<button class="btn btn-ghost btn-sm" onclick="deleteCrmUser(${u.id})" title="Delete User" style="color:var(--danger);font-size:11px;">✕ Delete</button>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function editCrmUserAccess(uid) {
+            const pwd = getPwd();
+            const u = allCrmUsers.find(usr => usr.id === uid);
+            if (!u) return;
+
+            let availableOptions = [];
+            if (senderGroupsList) {
+                senderGroupsList.forEach(g => availableOptions.push({ id: `group:${g.id}`, name: `👥 Group: ${g.group_name}` }));
+            }
+            if (sendersList) {
+                sendersList.forEach(s => availableOptions.push({ id: s.email, name: `📧 ${s.display_name} (${s.email})` }));
+            }
+
+            let textPrompt = `Edit Sender Access for ${u.username}:\n\nEnter comma-separated identifiers:\n\nAvailable Identifiers:\n` +
+                availableOptions.map(o => `• ${o.id} (${o.name})`).join('\n') +
+                `\n\nCurrent Access:\n` + u.access.join(', ');
+
+            let input = prompt(textPrompt, u.access.join(', '));
+            if (input === null) return;
+
+            let newAccess = input.split(',').map(x => x.trim()).filter(x => x);
+
+            try {
+                const res = await fetch(`/api/users/${uid}/access?pwd=` + encodeURIComponent(pwd), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ access: newAccess })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    alert(`✅ Sender access updated for ${u.username}!`);
+                    loadUsers();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to update access'));
+                }
+            } catch (e) {
+                alert('Connection error: ' + e);
+            }
+        }
+
+        async function createCrmUser() {
+            const pwd = getPwd();
+            const unInput = document.getElementById('crm-username');
+            const emInput = document.getElementById('crm-email');
+            const pwInput = document.getElementById('crm-password');
+            const rlInput = document.getElementById('crm-role');
+            const msgBox = document.getElementById('crm-status-msg');
+
+            const username = unInput?.value?.trim();
+            const email = emInput?.value?.trim();
+            const password = pwInput?.value?.trim();
+            const role = rlInput?.value || 'user';
+
+            const checkedNodes = document.querySelectorAll('input[name="crm-sender-check"]:checked');
+            const access = Array.from(checkedNodes).map(n => n.value);
+
+            if (!username || !email || !password) {
+                alert("Please fill in Username, Email, and Password.");
+                return;
+            }
+
+            if (role !== 'admin' && access.length === 0) {
+                alert("Please select at least 1 Sender Account or Sender Group for the standard user.");
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/users?pwd=' + encodeURIComponent(pwd), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password, role, access })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    if (unInput) unInput.value = '';
+                    if (emInput) emInput.value = '';
+                    if (pwInput) pwInput.value = '';
+                    if (msgBox) { msgBox.style.color = 'var(--success)'; msgBox.textContent = '✅ User created successfully!'; }
+                    loadUsers();
+                } else {
+                    if (msgBox) { msgBox.style.color = 'var(--danger)'; msgBox.textContent = '❌ Error: ' + (data.error || 'Failed'); }
+                }
+            } catch (e) {
+                if (msgBox) { msgBox.style.color = 'var(--danger)'; msgBox.textContent = '❌ Connection error.'; }
+            }
+        }
+
+        async function deleteCrmUser(uid) {
+            const pwd = getPwd();
+            if (!confirm("Are you sure you want to delete this user?")) return;
+            try {
+                await fetch(`/api/users/${uid}?pwd=` + encodeURIComponent(pwd), { method: 'DELETE' });
+                loadUsers();
+            } catch (e) {
+                alert("Error deleting user: " + e);
             }
         }
 
@@ -3657,6 +4074,197 @@ select.form-control {
             }
         }
 
+        // ── TASK ASSIGNMENT & CRM HELPER JS ───────────────────
+        let allCrmTasks = [];
+
+        async function reloadCrmChecklist() {
+            const pwd = getPwd();
+            try {
+                const r1 = await fetch('/api/senders?pwd=' + encodeURIComponent(pwd) + '&all_senders=true');
+                const rawSenders = await r1.json();
+                const r2 = await fetch('/api/sender-groups?pwd=' + encodeURIComponent(pwd));
+                const gData = await r2.json();
+
+                renderCrmUserChecklistCustom(rawSenders || [], gData.groups || []);
+                populateTaskFormDropdowns(rawSenders || [], gData.groups || []);
+            } catch (e) {
+                console.error("Error reloading CRM checklist:", e);
+            }
+        }
+
+        function renderCrmUserChecklistCustom(senders, groups) {
+            const box = document.getElementById('crm-senders-checklist');
+            if (!box) return;
+            let html = '';
+            if (groups && groups.length > 0) {
+                html += `<div style="font-weight:700;font-size:11px;color:var(--brand);margin-bottom:4px;margin-top:2px;">👥 SENDER GROUPS:</div>`;
+                groups.forEach(g => {
+                    html += `
+                    <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px;cursor:pointer;">
+                        <input type="checkbox" name="crm-sender-check" value="group:${g.id}">
+                        <span>👥 <strong>${g.group_name}</strong> (${g.member_emails.length} Accounts)</span>
+                    </label>`;
+                });
+            }
+            if (senders && senders.length > 0) {
+                html += `<div style="font-weight:700;font-size:11px;color:var(--brand);margin-bottom:4px;margin-top:6px;">📧 INDIVIDUAL ACCOUNTS:</div>`;
+                senders.forEach(s => {
+                    html += `
+                    <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px;cursor:pointer;">
+                        <input type="checkbox" name="crm-sender-check" value="${s.email}">
+                        <span><strong>${s.display_name || s.email.split('@')[0]}</strong> (${s.email})</span>
+                    </label>`;
+                });
+            }
+            box.innerHTML = html || `<div class="text-muted text-xs">No senders or groups configured yet.</div>`;
+        }
+
+        function populateTaskFormDropdowns(senders, groups) {
+            const uSel = document.getElementById('task-user-select');
+            if (uSel && allCrmUsers) {
+                uSel.innerHTML = `<option value="">Select Team User...</option>` +
+                    allCrmUsers.map(u => `<option value="${u.id}">${u.username} (${u.email})</option>`).join('');
+            }
+
+            const sSel = document.getElementById('task-sender-select');
+            if (sSel) {
+                let html = `<option value="">(Optional) Any assigned sender</option>`;
+                if (groups && groups.length > 0) {
+                    html += `<optgroup label="👥 Groups">`;
+                    groups.forEach(g => { html += `<option value="group:${g.id}">👥 Group: ${g.group_name}</option>`; });
+                    html += `</optgroup>`;
+                }
+                if (senders && senders.length > 0) {
+                    html += `<optgroup label="📧 Accounts">`;
+                    senders.forEach(s => { html += `<option value="${s.email}">${s.display_name} (${s.email})</option>`; });
+                    html += `</optgroup>`;
+                }
+                sSel.innerHTML = html;
+            }
+        }
+
+        async function loadCrmTasks() {
+            const pwd = getPwd();
+            try {
+                const res = await fetch('/api/tasks?pwd=' + encodeURIComponent(pwd));
+                const data = await res.json();
+                allCrmTasks = data.tasks || [];
+                renderCrmTasksList();
+            } catch (e) {
+                console.error("Error loading CRM tasks:", e);
+            }
+        }
+
+        function renderCrmTasksList() {
+            const box = document.getElementById('crm-tasks-list');
+            if (!box) return;
+            if (!allCrmTasks || allCrmTasks.length === 0) {
+                box.innerHTML = `<div class="text-muted text-xs">No assigned tasks found.</div>`;
+                return;
+            }
+            box.innerHTML = allCrmTasks.map(t => {
+                const statusBadge = t.status === 'completed' ? '<span class="badge badge-idle" style="background:#ecfdf5;color:#059669;">✅ Completed</span>' :
+                    t.status === 'in_progress' ? '<span class="badge badge-running">⏳ In Progress</span>' :
+                    '<span class="badge badge-paused">📌 Pending</span>';
+
+                const priorityBadge = t.priority === 'high' ? '<span style="color:#ef4444;font-weight:700;font-size:11px;">🔥 HIGH</span>' :
+                    t.priority === 'low' ? '<span style="color:#64748b;font-size:11px;">💤 LOW</span>' :
+                    '<span style="color:#6366f1;font-weight:600;font-size:11px;">⚡ NORMAL</span>';
+
+                const isTaskOwner = currentUser && (currentUser.role === 'admin' || currentUser.id === t.assigned_to_user_id);
+                const isAdmin = currentUser && currentUser.role === 'admin';
+
+                return `
+                <div style="padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">
+                    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;">
+                        <div>
+                            <div style="font-weight:700;font-size:13px;color:var(--text-primary);">${t.task_title}</div>
+                            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
+                                Assigned to: <strong>${t.assigned_username || 'User #' + t.assigned_to_user_id}</strong> &bull; Priority: ${priorityBadge}
+                            </div>
+                        </div>
+                        <div>${statusBadge}</div>
+                    </div>
+                    ${t.sender_identifier ? `<div style="font-size:11px;color:var(--brand);margin-top:4px;">🎯 Target Sender: <code>${t.sender_identifier}</code></div>` : ''}
+                    ${t.notes ? `<div style="font-size:11px;color:var(--text-muted);background:var(--surface-elevated, rgba(0,0,0,0.1));padding:4px 8px;border-radius:4px;margin-top:4px;">${t.notes}</div>` : ''}
+                    
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:6px;border-top:1px dashed var(--border);">
+                        <div style="font-size:10px;color:var(--text-muted);">${t.created_at}</div>
+                        <div style="display:flex;gap:6px;">
+                            ${isTaskOwner && t.status !== 'completed' ? `<button class="btn btn-ghost btn-sm" onclick="updateTaskStatus(${t.id}, 'completed')" style="color:#059669;font-size:11px;padding:2px 6px;">Mark Done ✅</button>` : ''}
+                            ${isTaskOwner && t.status === 'pending' ? `<button class="btn btn-ghost btn-sm" onclick="updateTaskStatus(${t.id}, 'in_progress')" style="color:#6366f1;font-size:11px;padding:2px 6px;">Start ⏳</button>` : ''}
+                            ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="deleteCrmTask(${t.id})" style="color:var(--danger);font-size:11px;padding:2px 6px;">✕ Delete</button>` : ''}
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function createCrmTask() {
+            const pwd = getPwd();
+            const usrSel = document.getElementById('task-user-select');
+            const titleIn = document.getElementById('task-title-input');
+            const sndSel = document.getElementById('task-sender-select');
+            const prioSel = document.getElementById('task-priority-select');
+            const notesIn = document.getElementById('task-notes-input');
+            const msgBox = document.getElementById('task-status-msg');
+
+            const assigned_to_user_id = usrSel?.value;
+            const task_title = titleIn?.value?.trim();
+            const sender_identifier = sndSel?.value;
+            const priority = prioSel?.value || 'normal';
+            const notes = notesIn?.value?.trim();
+
+            if (!assigned_to_user_id || !task_title) {
+                alert("Please select a Team User and enter a Task Title.");
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/tasks?pwd=' + encodeURIComponent(pwd), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ assigned_to_user_id, task_title, sender_identifier, priority, notes })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    if (titleIn) titleIn.value = '';
+                    if (notesIn) notesIn.value = '';
+                    if (msgBox) { msgBox.style.color = 'var(--success)'; msgBox.textContent = '✅ Task assigned successfully!'; }
+                    loadCrmTasks();
+                } else {
+                    if (msgBox) { msgBox.style.color = 'var(--danger)'; msgBox.textContent = '❌ Error: ' + (data.error || 'Failed'); }
+                }
+            } catch (e) {
+                if (msgBox) { msgBox.style.color = 'var(--danger)'; msgBox.textContent = '❌ Connection error.'; }
+            }
+        }
+
+        async function updateTaskStatus(tid, newStatus) {
+            const pwd = getPwd();
+            try {
+                await fetch(`/api/tasks/${tid}?pwd=` + encodeURIComponent(pwd), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                loadCrmTasks();
+            } catch (e) {
+                alert("Error updating task status: " + e);
+            }
+        }
+
+        async function deleteCrmTask(tid) {
+            const pwd = getPwd();
+            if (!confirm("Delete this task assignment?")) return;
+            try {
+                await fetch(`/api/tasks/${tid}?pwd=` + encodeURIComponent(pwd), { method: 'DELETE' });
+                loadCrmTasks();
+            } catch (e) {
+                alert("Error deleting task: " + e);
+            }
+        }
+
         function updateLaunchSenderDropdown() {
             const sel = document.getElementById('launch-sender') || document.getElementById('snd-select');
             if (!sel) return;
@@ -3684,9 +4292,9 @@ select.form-control {
         }
 
         // ── INIT ──────────────────────────────────────────
-        window.onload = function() {
-            initData();
-            loadDashboardData();
+        window.onload = async function() {
+            await initData();
+            await loadDashboardData();
             loadSenderGroups();
         };
 </script>

@@ -154,22 +154,58 @@
             </svg>
         </div>
         <h2>Welcome to NexMail</h2>
-        <p>Enter your password to access the platform</p>
+        <p>Sign in to your account or enter admin key</p>
         
+        <div id="login-error" style="display:none;color:#ef4444;background:rgba(239,68,68,0.1);padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:16px;border:1px solid rgba(239,68,68,0.2);"></div>
+
         <div class="input-group">
-            <input type="password" id="pwd" placeholder="Enter Password" onkeydown="if(event.key==='Enter')login()">
+            <input type="text" id="login-id" placeholder="Username or Email (or Admin Password)" onkeydown="if(event.key==='Enter')login()">
         </div>
-        <button onclick="login()">Access Dashboard</button>
+        <div class="input-group">
+            <input type="password" id="pwd" placeholder="Password" onkeydown="if(event.key==='Enter')login()">
+        </div>
+        <button id="login-btn" onclick="login()">Access Dashboard</button>
     </div>
 
     <script>
-        function login() {
-            var p = document.getElementById('pwd').value;
-            if (p) {
-                localStorage.setItem("mailer_password", p);
-                window.location.href = '/?pwd=' + encodeURIComponent(p);
+        async function login() {
+            var loginId = document.getElementById('login-id').value.trim();
+            var p = document.getElementById('pwd').value.trim();
+            var errBox = document.getElementById('login-error');
+            errBox.style.display = 'none';
+
+            if (!loginId && !p) {
+                errBox.textContent = 'Please enter your username/email and password.';
+                errBox.style.display = 'block';
+                return;
+            }
+
+            // Support single master password input in either field
+            var credential = p || loginId;
+            var payload = { login: loginId || credential, password: p || credential };
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    localStorage.setItem("mailer_password", data.token);
+                    localStorage.setItem("user_info", JSON.stringify(data.user));
+                    window.location.href = '/?pwd=' + encodeURIComponent(data.token);
+                } else {
+                    errBox.textContent = data.error || 'Invalid credentials.';
+                    errBox.style.display = 'block';
+                }
+            } catch (err) {
+                // Fallback direct redirection
+                localStorage.setItem("mailer_password", credential);
+                window.location.href = '/?pwd=' + encodeURIComponent(credential);
             }
         }
+
         window.onload = function() {
             var stored = localStorage.getItem("mailer_password");
             if (stored && window.location.search.indexOf("pwd") === -1) {

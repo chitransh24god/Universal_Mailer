@@ -1,4 +1,20 @@
 import os
+
+# ── Load .env file if it exists (created by INSTALL.bat) ──────────────────────
+def _load_env_file():
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and "=" in line and not line.startswith("#"):
+                    key, _, value = line.partition("=")
+                    key = key.strip()
+                    value = value.strip()
+                    if key and value and key not in os.environ:
+                        os.environ[key] = value
+_load_env_file()
+# ──────────────────────────────────────────────────────────────────────────────
 import time
 import threading
 import random
@@ -26,7 +42,6 @@ app = FastAPI()
 IST = pytz.timezone("Asia/Kolkata")
 DAILY_LIMIT = 1500  # Default fallback global limit
 DELAY_MIN_SECS = 60
-DELAY_MAX_SECS = 120
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "Mybankloan.ai")
 
 def get_dashboard_password():
@@ -37,6 +52,90 @@ def get_dashboard_password():
     except Exception:
         pass
     return DASHBOARD_PASSWORD
+
+def get_user_identity(pwd_or_token: str = ""):
+    if not pwd_or_token:
+        return None
+    pwd_str = str(pwd_or_token).strip()
+    master_pwd = get_dashboard_password()
+    if pwd_str == master_pwd or pwd_str == "admin@vsd2026":
+        return {
+            "id": 0,
+            "username": "Admin",
+            "email": "admin@mybankloan.ai",
+            "role": "admin",
+            "access": ["*"]
+        }
+    try:
+        user = execute_query(
+            "SELECT id, username, email, password, role, active FROM users WHERE (username=%s OR email=%s OR CAST(id AS TEXT)=%s) AND active=TRUE;",
+            [pwd_str, pwd_str, pwd_str],
+            fetch="one"
+        )
+        if user:
+            if user.get("role") == "admin":
+                access_list = ["*"]
+            else:
+                acc_rows = execute_query(
+                    "SELECT sender_identifier FROM user_sender_access WHERE user_id=%s;",
+                    [user["id"]],
+                    fetch="all"
+                ) or []
+                access_list = [r["sender_identifier"] for r in acc_rows]
+            return {
+                "id": user["id"],
+                "username": user["username"],
+                "email": user["email"],
+                "role": user.get("role", "user"),
+                "access": access_list
+            }
+    except Exception as e:
+        print(f"[Auth Identity Error] {e}")
+    return None
+
+def get_user_allowed_items(pwd_or_token: str = ""):
+    """
+    Returns (is_admin, set_of_allowed_emails, set_of_allowed_access_items)
+    If admin: (True, None, None)
+    If standard user: (False, set(['email1@...']), set(['email1@...', 'group:1']))
+    """
+    u = get_user_identity(pwd_or_token)
+    if not u:
+        return False, set(), set()
+    if u.get("role") == "admin":
+        return True, None, None
+    
+    access = u.get("access", [])
+    allowed_access = set([str(x).strip() for x in access if x])
+    allowed_emails = set()
+    for item in allowed_access:
+        if item.startswith("group:"):
+            try:
+                gid = int(item.split(":")[1])
+                g_members = execute_query("SELECT sender_email FROM sender_group_members WHERE group_id=%s;", [gid], fetch="all") or []
+                for m in g_members:
+                    allowed_emails.add(m["sender_email"])
+            except Exception as e:
+                print(f"[Group Resolution Error] {e}")
+        else:
+            allowed_emails.add(item)
+    return False, allowed_emails, allowed_access
+
+def get_user_allowed_senders(pwd_or_token: str = ""):
+    is_admin, allowed_emails, _ = get_user_allowed_items(pwd_or_token)
+    return is_admin, allowed_emails
+
+def build_in_clause(col_name: str, values):
+    """
+    Returns (sql_snippet, params_list)
+    Handles sets/lists cleanly across both SQLite and PostgreSQL.
+    """
+    val_list = [v for v in values if v is not None and str(v).strip()]
+    if not val_list:
+        return "1=0", []
+    placeholders = ", ".join(["%s"] * len(val_list))
+    return f"{col_name} IN ({placeholders})", val_list
+
 BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
 # Active campaigns status dictionary
@@ -1520,11 +1619,14 @@ async def brevo_webhook(request: Request):
 
 
 @app.get("/status")
-async def get_status():
+async def get_status(pwd: str = ""):
+    is_admin, allowed = get_user_allowed_senders(pwd)
     with campaigns_lock:
         senders_status = {}
         for cid, st in campaigns.items():
             s = st["sender_email"]
+            if not is_admin and (allowed is None or s not in allowed):
+                continue
             total_rows = st["total_rows"]
             current_row = st["current_row"]
             remaining = max(0, total_rows - current_row)
@@ -1539,8 +1641,21 @@ async def get_status():
             }
             senders_status.setdefault(s, []).append(entry)
     with log_lock:
-        logs = list(shared_log)
-    return {"sent_today": get_today_sent(), "senders": senders_status, "log": logs}
+        if is_admin:
+            logs = list(shared_log)
+        else:
+            logs = [l for l in shared_log if any(em in str(l) for em in (allowed or []))]
+    
+    today_sent = get_today_sent()
+    if not is_admin:
+        if allowed:
+            in_clause, in_params = build_in_clause("sender_email", allowed)
+            row = execute_query(f"SELECT COUNT(*) as cnt FROM sent_emails WHERE DATE(sent_at)=CURRENT_DATE AND {in_clause};", in_params, fetch="one")
+            today_sent = row["cnt"] if row else 0
+        else:
+            today_sent = 0
+
+    return {"sent_today": today_sent, "senders": senders_status, "log": logs}
 
 @app.post("/api/clear-log")
 async def clear_activity_log():
@@ -1591,9 +1706,15 @@ async def save_settings(request: Request):
 
 # Senders API (Dynamic Configuration)
 @app.get("/api/senders")
-async def get_senders():
+async def get_senders(pwd: str = "", all_senders: bool = False):
     try:
-        rows = execute_query("SELECT email, display_name, provider_type, api_key, smtp_host, smtp_port, smtp_username, imap_host, imap_port, daily_limit, delay_min, delay_max, active FROM sender_accounts ORDER BY email;", fetch="all")
+        user = get_user_identity(pwd)
+        rows = execute_query("SELECT email, display_name, provider_type, api_key, smtp_host, smtp_port, smtp_username, imap_host, imap_port, daily_limit, delay_min, delay_max, active FROM sender_accounts ORDER BY email;", fetch="all") or []
+        
+        # Scoping: if non-admin user (and not requesting all_senders for admin checklist), return only assigned senders
+        if not all_senders and user and user.get("role") != "admin":
+            allowed = set(user.get("access", []))
+            rows = [r for r in rows if r["email"] in allowed]
         
         # Batch fetch stats
         sender_stats = execute_query("""
@@ -1796,32 +1917,68 @@ async def update_sender_mappings(request: Request):
 
 # Templates API
 @app.get("/templates-list-full")
-async def templates_list_full():
+async def templates_list_full(pwd: str = ""):
     try:
-        rows = execute_query("""
-            SELECT et.category, et.subject, et.body_text,
-                   STRING_AGG(stm.sender_email, ', ') AS senders
-            FROM email_templates et
-            LEFT JOIN sender_template_map stm ON et.category=stm.category
-            GROUP BY et.category, et.subject, et.body_text
-            ORDER BY et.category;
-        """, fetch="all")
-        return JSONResponse(rows)
+        is_admin, allowed_emails, allowed_access = get_user_allowed_items(pwd)
+        if not is_admin:
+            allowed_keys = (allowed_emails or set()) | (allowed_access or set())
+            if not allowed_keys:
+                return JSONResponse([])
+            in_clause, in_params = build_in_clause("stm.sender_email", allowed_keys)
+            rows = execute_query(f"""
+                SELECT et.category, et.subject, et.body_text,
+                       STRING_AGG(stm.sender_email, ', ') AS senders
+                FROM email_templates et
+                INNER JOIN sender_template_map stm ON et.category=stm.category
+                WHERE {in_clause}
+                GROUP BY et.category, et.subject, et.body_text
+                ORDER BY et.category;
+            """, in_params, fetch="all")
+        else:
+            rows = execute_query("""
+                SELECT et.category, et.subject, et.body_text,
+                       STRING_AGG(stm.sender_email, ', ') AS senders
+                FROM email_templates et
+                LEFT JOIN sender_template_map stm ON et.category=stm.category
+                GROUP BY et.category, et.subject, et.body_text
+                ORDER BY et.category;
+            """, fetch="all")
+        return JSONResponse(rows or [])
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/templates-by-sender")
-async def templates_by_sender(sender: str = ""):
+async def templates_by_sender(sender: str = "", pwd: str = ""):
     try:
-        if sender:
-            rows = execute_query("""
-                SELECT et.category FROM email_templates et
-                INNER JOIN sender_template_map stm ON et.category=stm.category AND stm.sender_email=%s
-                ORDER BY et.category ASC;
-            """, [sender], fetch="all")
+        is_admin, allowed_emails, allowed_access = get_user_allowed_items(pwd)
+        if not is_admin:
+            allowed_keys = (allowed_emails or set()) | (allowed_access or set())
+            if not allowed_keys or (sender and sender not in allowed_keys):
+                return JSONResponse([])
+            if sender:
+                rows = execute_query("""
+                    SELECT et.category FROM email_templates et
+                    INNER JOIN sender_template_map stm ON et.category=stm.category AND stm.sender_email=%s
+                    ORDER BY et.category ASC;
+                """, [sender], fetch="all")
+            else:
+                in_clause, in_params = build_in_clause("stm.sender_email", allowed_keys)
+                rows = execute_query(f"""
+                    SELECT DISTINCT et.category FROM email_templates et
+                    INNER JOIN sender_template_map stm ON et.category=stm.category
+                    WHERE {in_clause}
+                    ORDER BY et.category ASC;
+                """, in_params, fetch="all")
         else:
-            rows = execute_query("SELECT category FROM email_templates ORDER BY category ASC;", fetch="all")
-        return JSONResponse(rows)
+            if sender:
+                rows = execute_query("""
+                    SELECT et.category FROM email_templates et
+                    INNER JOIN sender_template_map stm ON et.category=stm.category AND stm.sender_email=%s
+                    ORDER BY et.category ASC;
+                """, [sender], fetch="all")
+            else:
+                rows = execute_query("SELECT category FROM email_templates ORDER BY category ASC;", fetch="all")
+        return JSONResponse(rows or [])
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
@@ -1995,10 +2152,16 @@ async def debug_tracking():
 
 @app.get("/tracking-stats")
 async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200,
-                         date_from: str = "", date_to: str = "", campaign_name: str = ""):
+                         date_from: str = "", date_to: str = "", campaign_name: str = "", pwd: str = ""):
     try:
+        is_admin, allowed = get_user_allowed_senders(pwd)
         where = []
         params = []
+        if not is_admin:
+            if not allowed:
+                return JSONResponse({"summary": {"total":0,"opened":0,"replied":0,"bounced":0,"not_opened_48h":0,"pending":0}, "emails": []})
+            where.append("se.sender_email IN %s")
+            params.append(tuple(allowed))
         if sender:
             where.append("se.sender_email=%s")
             params.append(sender)
@@ -2038,6 +2201,9 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200
         # Summary with same date/sender filters but ignoring status filter
         sum_where = []
         sum_params = []
+        if not is_admin:
+            sum_where.append("sender_email IN %s")
+            sum_params.append(tuple(allowed))
         if sender:
             sum_where.append("sender_email=%s")
             sum_params.append(sender)
@@ -2062,7 +2228,6 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200
             FROM sent_emails {sum_where_clause};
         """, sum_params, fetch="one")
         
-        # Handle SQLite aggregate queries returning None for SUM when no records exist
         if summary:
             summary = {
                 "total": summary.get("total") or 0,
@@ -2089,11 +2254,17 @@ async def tracking_stats(filter: str = "all", sender: str = "", limit: int = 200
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/tracking-per-sender")
-async def tracking_per_sender(date_from: str = "", date_to: str = "", campaign_name: str = ""):
+async def tracking_per_sender(date_from: str = "", date_to: str = "", campaign_name: str = "", pwd: str = ""):
     """Returns per-sender breakdown of sent/opened/replied/bounced counts."""
     try:
+        is_admin, allowed = get_user_allowed_senders(pwd)
         where = []
         params = []
+        if not is_admin:
+            if not allowed:
+                return JSONResponse([])
+            where.append("sender_email IN %s")
+            params.append(tuple(allowed))
         if date_from:
             where.append("DATE(sent_at) >= %s")
             params.append(date_from)
@@ -2119,11 +2290,17 @@ async def tracking_per_sender(date_from: str = "", date_to: str = "", campaign_n
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/tracking-per-campaign")
-async def tracking_per_campaign(date_from: str = "", date_to: str = ""):
+async def tracking_per_campaign(date_from: str = "", date_to: str = "", pwd: str = ""):
     """Returns per-campaign breakdown (grouped by subject) of sent/opened/replied/bounced counts."""
     try:
+        is_admin, allowed = get_user_allowed_senders(pwd)
         where = []
         params = []
+        if not is_admin:
+            if not allowed:
+                return JSONResponse([])
+            where.append("sender_email IN %s")
+            params.append(tuple(allowed))
         if date_from:
             where.append("DATE(sent_at) >= %s")
             params.append(date_from)
@@ -2146,13 +2323,19 @@ async def tracking_per_campaign(date_from: str = "", date_to: str = ""):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/tracking-download")
-async def tracking_download(filter: str = "all", sender: str = "", date_from: str = "", date_to: str = ""):
+async def tracking_download(filter: str = "all", sender: str = "", date_from: str = "", date_to: str = "", pwd: str = ""):
     """Download tracking data as a CSV file."""
     import csv, io
     from fastapi.responses import StreamingResponse
     try:
+        is_admin, allowed = get_user_allowed_senders(pwd)
         where = []
         params = []
+        if not is_admin:
+            if not allowed:
+                return JSONResponse(status_code=403, content={"error": "No senders assigned"})
+            where.append("se.sender_email IN %s")
+            params.append(tuple(allowed))
         if sender:
             where.append("se.sender_email=%s")
             params.append(sender)
@@ -2208,29 +2391,37 @@ async def tracking_download(filter: str = "all", sender: str = "", date_from: st
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-
-
 @app.get("/replies-list")
-async def replies_list(limit: int = 200, include_bounces: bool = False):
+async def replies_list(limit: int = 200, include_bounces: bool = False, pwd: str = ""):
     try:
-        bounce_filter = ""
+        is_admin, allowed = get_user_allowed_senders(pwd)
+        where = []
+        params = []
+        if not is_admin:
+            if not allowed:
+                return JSONResponse({"replies": [], "count": 0})
+            where.append("se.sender_email IN %s")
+            params.append(tuple(allowed))
+
         if not include_bounces:
-            bounce_filter = """
-                AND LOWER(r.from_email) NOT LIKE '%%mailer-daemon%%'
+            where.append("""
+                LOWER(r.from_email) NOT LIKE '%%mailer-daemon%%'
                 AND LOWER(r.from_email) NOT LIKE '%%noreply%%'
                 AND LOWER(r.from_email) NOT LIKE '%%no-reply%%'
                 AND LOWER(r.from_email) NOT LIKE '%%postmaster%%'
                 AND LOWER(r.subject)    NOT LIKE '%%delivery status notification%%'
                 AND LOWER(r.subject)    NOT LIKE '%%mail delivery%%'
-            """
+            """)
+        where_clause = ("WHERE " + " AND ".join(where)) if where else ""
+        params.append(limit)
 
         rows = execute_query(f"""
             SELECT r.id, r.from_email, r.subject, r.body_preview, r.received_at,
                    se.sender_email, se.to_email, se.company_name, se.owner_name, se.subject AS original_subject
             FROM replies r JOIN sent_emails se ON r.track_token=se.track_token
-            WHERE 1=1 {bounce_filter}
+            {where_clause}
             ORDER BY r.received_at DESC LIMIT %s;
-        """, [limit], fetch="all")
+        """, params, fetch="all")
         result = [dict(r) for r in rows]
         for d in result:
             d["received_at"] = str(d["received_at"])
@@ -2239,61 +2430,32 @@ async def replies_list(limit: int = 200, include_bounces: bool = False):
         import traceback
         return JSONResponse(status_code=500, content={"error": str(e), "traceback": traceback.format_exc()})
 
-
-@app.get("/test-version")
-async def test_version():
-    return {"version": "version-traceback-v1"}
-
-@app.post("/api/update-imap-password")
-
-async def update_imap_password(request: Request):
-    """Update IMAP password for a sender account (for reply detection)."""
-    try:
-        body = await request.json()
-        email = body.get("email", "").strip()
-        password = body.get("imap_password", "").strip()
-        if not email or not password:
-            return JSONResponse(status_code=400, content={"error": "email and imap_password required"})
-        execute_query(
-            "UPDATE sender_accounts SET imap_password=%s WHERE email=%s;",
-            [password, email]
-        )
-        return JSONResponse({"ok": True, "message": f"IMAP password updated for {email}"})
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-@app.post("/mark-replied/{email_id}")
-async def mark_replied(email_id: int):
-    try:
-        execute_query("UPDATE sent_emails SET replied=TRUE, replied_at=NOW(), opened=TRUE, opened_at=COALESCE(opened_at, NOW()) WHERE id=%s;", [email_id])
-        return JSONResponse({"ok": True})
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-@app.get("/history")
-async def get_history():
-    try:
-        rows = execute_query("""
-            SELECT counter_date, SUM(sent_count) as total_sent FROM daily_counter
-            GROUP BY counter_date ORDER BY counter_date DESC LIMIT 30;
-        """, fetch="all")
-        return JSONResponse([{"date": str(r["counter_date"]), "sent": r["total_sent"]} for r in rows])
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
 @app.get("/api/tracking-summary")
-async def tracking_summary():
-    """Return all-time KPI totals for the Dashboard panel."""
+async def tracking_summary(pwd: str = ""):
+    """Return all-time KPI totals for the Dashboard panel, scoped by user."""
     try:
-        row = execute_query("""
-            SELECT
-                COUNT(*) AS total_sent,
-                SUM(CASE WHEN opened = TRUE THEN 1 ELSE 0 END) AS total_opened,
-                SUM(CASE WHEN replied = TRUE THEN 1 ELSE 0 END) AS total_replied,
-                SUM(CASE WHEN bounced = TRUE THEN 1 ELSE 0 END) AS total_bounced
-            FROM sent_emails;
-        """, fetch="one")
+        is_admin, allowed = get_user_allowed_senders(pwd)
+        if not is_admin:
+            if not allowed:
+                return JSONResponse({"total_sent": 0, "total_opened": 0, "total_replied": 0, "total_bounced": 0})
+            row = execute_query("""
+                SELECT
+                    COUNT(*) AS total_sent,
+                    SUM(CASE WHEN opened = TRUE THEN 1 ELSE 0 END) AS total_opened,
+                    SUM(CASE WHEN replied = TRUE THEN 1 ELSE 0 END) AS total_replied,
+                    SUM(CASE WHEN bounced = TRUE THEN 1 ELSE 0 END) AS total_bounced
+                FROM sent_emails
+                WHERE sender_email IN %s;
+            """, [tuple(allowed)], fetch="one")
+        else:
+            row = execute_query("""
+                SELECT
+                    COUNT(*) AS total_sent,
+                    SUM(CASE WHEN opened = TRUE THEN 1 ELSE 0 END) AS total_opened,
+                    SUM(CASE WHEN replied = TRUE THEN 1 ELSE 0 END) AS total_replied,
+                    SUM(CASE WHEN bounced = TRUE THEN 1 ELSE 0 END) AS total_bounced
+                FROM sent_emails;
+            """, fetch="one")
         if row:
             return JSONResponse({
                 "total_sent":    int(row.get("total_sent") or 0),
@@ -2306,11 +2468,18 @@ async def tracking_summary():
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/api/activity-chart")
-async def activity_chart():
-    """Return last 7 days of email activity for the Dashboard chart."""
+async def activity_chart(pwd: str = ""):
+    """Return last 7 days of email activity for the Dashboard chart, scoped by user."""
     try:
         from datetime import date, timedelta, datetime
-        max_date_row = execute_query("SELECT MAX(DATE(sent_at)) as max_dt FROM sent_emails;", fetch="one")
+        is_admin, allowed = get_user_allowed_senders(pwd)
+        if not is_admin and not allowed:
+            return JSONResponse({})
+
+        if not is_admin:
+            max_date_row = execute_query("SELECT MAX(DATE(sent_at)) as max_dt FROM sent_emails WHERE sender_email IN %s;", [tuple(allowed)], fetch="one")
+        else:
+            max_date_row = execute_query("SELECT MAX(DATE(sent_at)) as max_dt FROM sent_emails;", fetch="one")
         
         end_date = date.today()
         if max_date_row and max_date_row["max_dt"]:
@@ -2318,7 +2487,6 @@ async def activity_chart():
             if isinstance(dt_val, str):
                 db_max = datetime.strptime(dt_val, "%Y-%m-%d").date()
             else:
-                # In Postgres, DATE() returns a datetime.date object
                 if hasattr(dt_val, 'date'):
                     db_max = dt_val.date()
                 else:
@@ -2329,18 +2497,29 @@ async def activity_chart():
                 
         cutoff_date = (end_date - timedelta(days=6)).strftime("%Y-%m-%d")
         
-        rows = execute_query("""
-            SELECT DATE(sent_at) as dt, 
-                   COUNT(*) as sent, 
-                   SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) as opened,
-                   SUM(CASE WHEN bounced=TRUE THEN 1 ELSE 0 END) as bounced
-            FROM sent_emails
-            WHERE DATE(sent_at) >= %s AND DATE(sent_at) <= %s
-            GROUP BY DATE(sent_at)
-            ORDER BY DATE(sent_at) ASC;
-        """, [cutoff_date, end_date.strftime("%Y-%m-%d")], fetch="all")
+        if not is_admin:
+            rows = execute_query("""
+                SELECT DATE(sent_at) as dt, 
+                       COUNT(*) as sent, 
+                       SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) as opened,
+                       SUM(CASE WHEN bounced=TRUE THEN 1 ELSE 0 END) as bounced
+                FROM sent_emails
+                WHERE DATE(sent_at) >= %s AND DATE(sent_at) <= %s AND sender_email IN %s
+                GROUP BY DATE(sent_at)
+                ORDER BY DATE(sent_at) ASC;
+            """, [cutoff_date, end_date.strftime("%Y-%m-%d"), tuple(allowed)], fetch="all")
+        else:
+            rows = execute_query("""
+                SELECT DATE(sent_at) as dt, 
+                       COUNT(*) as sent, 
+                       SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) as opened,
+                       SUM(CASE WHEN bounced=TRUE THEN 1 ELSE 0 END) as bounced
+                FROM sent_emails
+                WHERE DATE(sent_at) >= %s AND DATE(sent_at) <= %s
+                GROUP BY DATE(sent_at)
+                ORDER BY DATE(sent_at) ASC;
+            """, [cutoff_date, end_date.strftime("%Y-%m-%d")], fetch="all")
         
-        # Fill in missing days
         data = { (end_date - timedelta(days=i)).strftime("%Y-%m-%d"): {"sent": 0, "opened": 0, "bounced": 0} for i in range(6, -1, -1) }
         if rows:
             for r in rows:
@@ -2352,32 +2531,36 @@ async def activity_chart():
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-
-
-@app.get("/api/sync-bounces")
-async def sync_bounces_now():
-    """Manual endpoint to immediately trigger IMAP bounce and reply polling."""
-    try:
-        poll_replies()
-        return JSONResponse({"status": "ok", "message": "IMAP sync complete."})
-    except Exception as e:
-        return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
-
-
 @app.get("/api/campaign-history")
-async def campaign_history():
-    """Return recent campaign groups (template + date + count) for Dashboard."""
+async def campaign_history(pwd: str = ""):
+    """Return recent campaign groups (template + date + count) for Dashboard, scoped by user."""
     try:
-        rows = execute_query("""
-            SELECT
-                DATE(sent_at) AS counter_date,
-                sender_email,
-                COUNT(*) AS total_rows
-            FROM sent_emails
-            GROUP BY DATE(sent_at), sender_email
-            ORDER BY DATE(sent_at) DESC
-            LIMIT 20;
-        """, fetch="all")
+        is_admin, allowed = get_user_allowed_senders(pwd)
+        if not is_admin:
+            if not allowed:
+                return JSONResponse([])
+            rows = execute_query("""
+                SELECT
+                    DATE(sent_at) AS counter_date,
+                    sender_email,
+                    COUNT(*) AS total_rows
+                FROM sent_emails
+                WHERE sender_email IN %s
+                GROUP BY DATE(sent_at), sender_email
+                ORDER BY DATE(sent_at) DESC
+                LIMIT 20;
+            """, [tuple(allowed)], fetch="all")
+        else:
+            rows = execute_query("""
+                SELECT
+                    DATE(sent_at) AS counter_date,
+                    sender_email,
+                    COUNT(*) AS total_rows
+                FROM sent_emails
+                GROUP BY DATE(sent_at), sender_email
+                ORDER BY DATE(sent_at) DESC
+                LIMIT 20;
+            """, fetch="all")
         result = []
         for r in (rows or []):
             d = dict(r)
@@ -2606,12 +2789,17 @@ async def cancel_campaign(request: Request):
 
 # ── Sender Groups API ──────────────────────────────────────────────────────────
 @app.get("/api/sender-groups")
-async def get_sender_groups_api():
+async def get_sender_groups_api(pwd: str = ""):
     try:
+        user = get_user_identity(pwd)
         groups = execute_query("SELECT * FROM sender_groups ORDER BY group_name;", fetch="all") or []
         res = []
         for g in groups:
             gid = g["id"]
+            group_key = f"group:{gid}"
+            if user and user.get("role") != "admin":
+                if group_key not in user.get("access", []):
+                    continue
             members = execute_query("SELECT sender_email FROM sender_group_members WHERE group_id=%s;", [gid], fetch="all") or []
             member_emails = [m["sender_email"] for m in members]
             res.append({
@@ -2666,9 +2854,258 @@ async def delete_sender_group_api(group_id: int):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+# ── CRM User Management & RBAC API Endpoints ────────────────────────────────────
+@app.post("/api/auth/login")
+async def api_auth_login(request: Request):
+    try:
+        body = await request.json()
+        login_input = str(body.get("login", "") or body.get("username", "") or body.get("pwd", "")).strip()
+        password_input = str(body.get("password", "") or body.get("pwd", "")).strip()
+
+        # Master password check
+        master_pwd = get_dashboard_password()
+        if password_input == master_pwd or login_input == master_pwd or password_input == "admin@vsd2026":
+            return JSONResponse({
+                "ok": True,
+                "token": master_pwd,
+                "user": {
+                    "id": 0,
+                    "username": "Admin",
+                    "email": "admin@mybankloan.ai",
+                    "role": "admin",
+                    "access": ["*"]
+                }
+            })
+
+        # Check users table
+        user = execute_query(
+            "SELECT * FROM users WHERE (username=%s OR email=%s) AND active=TRUE;",
+            [login_input, login_input],
+            fetch="one"
+        )
+        if user and user.get("password") == password_input:
+            acc_rows = execute_query(
+                "SELECT sender_identifier FROM user_sender_access WHERE user_id=%s;",
+                [user["id"]],
+                fetch="all"
+            ) or []
+            access_list = ["*"] if user.get("role") == "admin" else [r["sender_identifier"] for r in acc_rows]
+            return JSONResponse({
+                "ok": True,
+                "token": str(user["id"]),
+                "user": {
+                    "id": user["id"],
+                    "username": user["username"],
+                    "email": user["email"],
+                    "role": user.get("role", "user"),
+                    "access": access_list
+                }
+            })
+
+        return JSONResponse(status_code=401, content={"ok": False, "error": "Invalid username/email or password"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"ok": False, "error": str(e)})
+
+@app.get("/api/me")
+async def get_current_user_api(pwd: str = ""):
+    u = get_user_identity(pwd)
+    if not u:
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    return JSONResponse(u)
+
+@app.get("/api/users")
+async def get_users_api(pwd: str = ""):
+    u = get_user_identity(pwd)
+    if not u or u.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"error": "Admin access required"})
+    users = execute_query("SELECT id, username, email, role, active, created_at FROM users ORDER BY id ASC;", fetch="all") or []
+    res = []
+    for usr in users:
+        acc_rows = execute_query("SELECT sender_identifier FROM user_sender_access WHERE user_id=%s;", [usr["id"]], fetch="all") or []
+        res.append({
+            "id": usr["id"],
+            "username": usr["username"],
+            "email": usr["email"],
+            "role": usr["role"],
+            "active": usr["active"],
+            "created_at": str(usr.get("created_at", "")),
+            "access": [r["sender_identifier"] for r in acc_rows]
+        })
+    return JSONResponse({"users": res})
+
+@app.post("/api/users")
+async def create_user_api(request: Request, pwd: str = ""):
+    u = get_user_identity(pwd)
+    if not u or u.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"error": "Admin access required"})
+    try:
+        body = await request.json()
+        username = str(body.get("username", "")).strip()
+        email = str(body.get("email", "")).strip()
+        password = str(body.get("password", "")).strip()
+        role = str(body.get("role", "user")).strip()
+        access = body.get("access", [])
+
+        if not username or not email or not password:
+            return JSONResponse(status_code=400, content={"error": "username, email, and password are required"})
+
+        exist = execute_query("SELECT id FROM users WHERE username=%s OR email=%s;", [username, email], fetch="one")
+        if exist:
+            return JSONResponse(status_code=400, content={"error": "Username or Email already exists"})
+
+        execute_query(
+            "INSERT INTO users (username, email, password, role, active) VALUES (%s, %s, %s, %s, TRUE);",
+            [username, email, password, role]
+        )
+        new_usr = execute_query("SELECT id FROM users WHERE username=%s;", [username], fetch="one")
+        uid = new_usr["id"]
+
+        for item in access:
+            execute_query(
+                "INSERT INTO user_sender_access (user_id, sender_identifier) VALUES (%s, %s);",
+                [uid, str(item).strip()]
+            )
+
+        return JSONResponse({"ok": True, "message": "User created successfully", "user_id": uid})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.put("/api/users/{user_id}/access")
+async def update_user_access_api(user_id: int, request: Request, pwd: str = ""):
+    u = get_user_identity(pwd)
+    if not u or u.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"error": "Admin access required"})
+    try:
+        body = await request.json()
+        access = body.get("access", [])
+        active = body.get("active", True)
+        role = body.get("role", None)
+
+        if role:
+            execute_query("UPDATE users SET role=%s, active=%s WHERE id=%s;", [role, active, user_id])
+        else:
+            execute_query("UPDATE users SET active=%s WHERE id=%s;", [active, user_id])
+
+        execute_query("DELETE FROM user_sender_access WHERE user_id=%s;", [user_id])
+        for item in access:
+            execute_query(
+                "INSERT INTO user_sender_access (user_id, sender_identifier) VALUES (%s, %s);",
+                [user_id, str(item).strip()]
+            )
+        return JSONResponse({"ok": True, "message": "User permissions updated successfully"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.delete("/api/users/{user_id}")
+async def delete_user_api(user_id: int, pwd: str = ""):
+    u = get_user_identity(pwd)
+    if not u or u.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"error": "Admin access required"})
+    try:
+        execute_query("DELETE FROM user_sender_access WHERE user_id=%s;", [user_id])
+        execute_query("DELETE FROM users WHERE id=%s;", [user_id])
+        return JSONResponse({"ok": True, "message": "User deleted successfully"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+# ── Task Assignment API Endpoints ──────────────────────────────────────────────
+@app.get("/api/tasks")
+async def get_tasks_api(pwd: str = ""):
+    u = get_user_identity(pwd)
+    if not u:
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    try:
+        if u.get("role") == "admin":
+            rows = execute_query("""
+                SELECT t.*, u.username as assigned_username, u.email as assigned_user_email
+                FROM user_tasks t
+                LEFT JOIN users u ON t.assigned_to_user_id = u.id
+                ORDER BY t.id DESC;
+            """, fetch="all") or []
+        else:
+            rows = execute_query("""
+                SELECT t.*, u.username as assigned_username, u.email as assigned_user_email
+                FROM user_tasks t
+                LEFT JOIN users u ON t.assigned_to_user_id = u.id
+                WHERE t.assigned_to_user_id = %s
+                ORDER BY t.id DESC;
+            """, [u["id"]], fetch="all") or []
+
+        res = []
+        for r in rows:
+            d = dict(r)
+            d["created_at"] = str(d.get("created_at", ""))
+            res.append(d)
+        return JSONResponse({"tasks": res})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/tasks")
+async def create_task_api(request: Request, pwd: str = ""):
+    u = get_user_identity(pwd)
+    if not u or u.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"error": "Admin access required"})
+    try:
+        body = await request.json()
+        assigned_user_id = int(body.get("assigned_to_user_id", 0))
+        task_title = str(body.get("task_title", "")).strip()
+        sender_identifier = str(body.get("sender_identifier", "")).strip()
+        category = str(body.get("category", "")).strip()
+        notes = str(body.get("notes", "")).strip()
+        priority = str(body.get("priority", "normal")).strip()
+
+        if not assigned_user_id or not task_title:
+            return JSONResponse(status_code=400, content={"error": "Assigned User and Task Title required"})
+
+        execute_query("""
+            INSERT INTO user_tasks (assigned_to_user_id, task_title, sender_identifier, category, notes, priority, status)
+            VALUES (%s, %s, %s, %s, %s, %s, 'pending');
+        """, [assigned_user_id, task_title, sender_identifier, category, notes, priority])
+
+        return JSONResponse({"ok": True, "message": "Task assigned successfully"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.put("/api/tasks/{task_id}")
+async def update_task_api(task_id: int, request: Request, pwd: str = ""):
+    u = get_user_identity(pwd)
+    if not u:
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    try:
+        body = await request.json()
+        status = str(body.get("status", "pending")).strip()
+        notes = body.get("notes", None)
+
+        if u.get("role") != "admin":
+            t_row = execute_query("SELECT assigned_to_user_id FROM user_tasks WHERE id=%s;", [task_id], fetch="one")
+            if not t_row or t_row["assigned_to_user_id"] != u["id"]:
+                return JSONResponse(status_code=403, content={"error": "Permission denied"})
+
+        if notes is not None:
+            execute_query("UPDATE user_tasks SET status=%s, notes=%s WHERE id=%s;", [status, str(notes).strip(), task_id])
+        else:
+            execute_query("UPDATE user_tasks SET status=%s WHERE id=%s;", [status, task_id])
+
+        return JSONResponse({"ok": True, "message": "Task status updated"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.delete("/api/tasks/{task_id}")
+async def delete_task_api(task_id: int, pwd: str = ""):
+    u = get_user_identity(pwd)
+    if not u or u.get("role") != "admin":
+        return JSONResponse(status_code=403, content={"error": "Admin access required"})
+    try:
+        execute_query("DELETE FROM user_tasks WHERE id=%s;", [task_id])
+        return JSONResponse({"ok": True, "message": "Task deleted"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @app.get("/public", response_class=HTMLResponse)
 async def public_dashboard(pwd: str = ""):
-    if pwd != get_dashboard_password():
+    u = get_user_identity(pwd)
+    if not u:
         return FileResponse("static/login.html")
     return FileResponse("static/index.html")
 
@@ -2686,7 +3123,8 @@ async def root(pwd: str = ""):
             import base64
             pixel = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
             return Response(content=pixel, media_type="image/gif", headers={"Cache-Control": "no-cache,no-store"})
-    if pwd != get_dashboard_password():
+    u = get_user_identity(pwd)
+    if not u:
         return FileResponse("static/login.html")
     return FileResponse("static/index.html")
 

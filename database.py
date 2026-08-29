@@ -5,19 +5,22 @@ from psycopg2.extras import RealDictCursor
 
 import base64
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+# Read at call time (not module load time) so Render env vars are always picked up
+def _get_database_url():
+    return os.environ.get("DATABASE_URL")
 
 def get_connection():
     """
     Returns a connection to either PostgreSQL (if DATABASE_URL is set) or local SQLite.
     """
+    DATABASE_URL = _get_database_url()
     if DATABASE_URL:
         try:
             conn = psycopg2.connect(DATABASE_URL)
             return conn, False  # False means NOT sqlite (Postgres)
         except Exception as e:
             print(f"[DB] Failed to connect to PostgreSQL: {e}. Falling back to SQLite...")
-    
+
     # Fallback to SQLite
     db_path = os.environ.get("SQLITE_DB_PATH", "universal_mailer.db")
     conn = sqlite3.connect(db_path)
@@ -328,12 +331,30 @@ def init_db():
         );
     """)
 
-    # 12. Sender Group Members
+    # 13. Users Table (CRM / Multi-User RBAC)
     execute_query("""
-        CREATE TABLE IF NOT EXISTS sender_group_members (
+        CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
-            group_id INTEGER NOT NULL,
-            sender_email TEXT NOT NULL,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            role TEXT DEFAULT 'user',
+            active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
+    # 15. User Tasks Assignment Table
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS user_tasks (
+            id SERIAL PRIMARY KEY,
+            assigned_to_user_id INTEGER NOT NULL,
+            task_title TEXT NOT NULL,
+            sender_identifier TEXT,
+            category TEXT,
+            notes TEXT,
+            priority TEXT DEFAULT 'normal',
+            status TEXT DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
@@ -342,9 +363,22 @@ def init_db():
 
 def seed_defaults():
     """
-    Seeds default sender accounts, templates, and mappings from the original app code
-    if they do not already exist in the database.
+    Seeds default sender accounts, templates, mappings, and admin user.
     """
+    # Seed default Admin User if not exists
+    try:
+        admin_exists = execute_query("SELECT COUNT(*) as c FROM users WHERE role='admin';", fetch="one")
+        if not admin_exists or admin_exists["c"] == 0:
+            from os import environ
+            pwd = environ.get("DASHBOARD_PASSWORD", "admin@vsd2026")
+            execute_query("""
+                INSERT INTO users (username, email, password, role, active)
+                VALUES ('admin', 'admin@mybankloan.ai', %s, 'admin', TRUE)
+                ON CONFLICT (username) DO NOTHING;
+            """, [pwd])
+    except Exception as ue:
+        print(f"[DB Admin Seed Error] {ue}")
+
     # Seed Global Settings
     execute_query("""
         INSERT INTO global_settings (key, value)
