@@ -1975,12 +1975,22 @@ select.form-control {
         let currentFilter = 'all';
         let analysisTimeout = null;
 
-        // Fetch Password from Query or LocalStorage
+        // Fetch Password from Query or LocalStorage (Universal Multi-Device Persistence)
         function getPwd() {
             const urlParams = new URLSearchParams(window.location.search);
-            let pwd = urlParams.get('pwd') || localStorage.getItem("mailer_password");
-            if (!pwd) pwd = 'admin@123';
-            return pwd;
+            let pwd = urlParams.get('pwd');
+            if (pwd && pwd.trim()) {
+                pwd = pwd.trim();
+                try { localStorage.setItem("mailer_password", pwd); } catch(e){}
+                return pwd;
+            }
+            try {
+                pwd = localStorage.getItem("mailer_password");
+            } catch(e){}
+            if (pwd && pwd.trim()) {
+                return pwd.trim();
+            }
+            return "Mybankloan.ai";
         }
 
         // ── TAB SWITCHER ──────────────────────────────────
