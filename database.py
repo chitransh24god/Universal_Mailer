@@ -1,23 +1,66 @@
 import os
+import threading
 import sqlite3
 import psycopg2
+from psycopg2 import pool
 from psycopg2.extras import RealDictCursor
 
 import base64
 
+import re
+
 # Read at call time (not module load time) so Render env vars are always picked up
 def _get_database_url():
-    return os.environ.get("DATABASE_URL")
+    url = os.environ.get("DATABASE_URL")
+    if url and "neon.tech" in url and "-pooler" not in url:
+        # Automatically use Neon pooler for faster performance and lower latency
+        parts = url.split("@", 1)
+        if len(parts) == 2:
+            host_part = parts[1]
+            new_host = re.sub(r'^(ep-[a-z0-9-]+)(\.c-[^/]+)', r'\1-pooler\2', host_part)
+            url = parts[0] + "@" + new_host
+    return url
+
+_db_pool = None
+_pool_lock = threading.Lock()
+
+def get_db_pool():
+    global _db_pool
+    if _db_pool is None:
+        with _pool_lock:
+            if _db_pool is None:
+                url = _get_database_url()
+                if url:
+                    try:
+                        _db_pool = pool.ThreadedConnectionPool(minconn=1, maxconn=10, dsn=url)
+                        print("[DB] Initialized ThreadedConnectionPool with Neon PostgreSQL")
+                    except Exception as e:
+                        print(f"[DB] Error initializing ThreadedConnectionPool: {e}")
+    return _db_pool
 
 def get_connection():
     """
-    Returns a connection to either PostgreSQL (if DATABASE_URL is set) or local SQLite.
+    Returns (conn, is_sqlite, is_pooled).
     """
-    DATABASE_URL = _get_database_url()
-    if DATABASE_URL:
+    db_pool = get_db_pool()
+    if db_pool:
         try:
-            conn = psycopg2.connect(DATABASE_URL)
-            return conn, False  # False means NOT sqlite (Postgres)
+            conn = db_pool.getconn()
+            if conn and conn.closed:
+                try:
+                    db_pool.putconn(conn, close=True)
+                except Exception:
+                    pass
+                conn = db_pool.getconn()
+            return conn, False, True
+        except Exception as e:
+            print(f"[DB] Pool getconn error: {e}")
+
+    url = _get_database_url()
+    if url:
+        try:
+            conn = psycopg2.connect(url)
+            return conn, False, False
         except Exception as e:
             print(f"[DB] Failed to connect to PostgreSQL: {e}. Falling back to SQLite...")
 
@@ -25,7 +68,23 @@ def get_connection():
     db_path = os.environ.get("SQLITE_DB_PATH", "universal_mailer.db")
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    return conn, True  # True means IS sqlite
+    return conn, True, False
+
+def release_connection(conn, is_sqlite, is_pooled):
+    if not conn:
+        return
+    if is_pooled:
+        try:
+            db_pool = get_db_pool()
+            if db_pool:
+                db_pool.putconn(conn)
+                return
+        except Exception as e:
+            print(f"[DB] Error putting connection back to pool: {e}")
+    try:
+        conn.close()
+    except Exception:
+        pass
 
 def execute_query(query, params=None, fetch=None, commit=True, silent=False):
     """
@@ -35,7 +94,7 @@ def execute_query(query, params=None, fetch=None, commit=True, silent=False):
     if params is None:
         params = []
     
-    conn, is_sqlite = get_connection()
+    conn, is_sqlite, is_pooled = get_connection()
     try:
         if is_sqlite:
             # SQLite uses '?' placeholder instead of '%s'
@@ -79,18 +138,21 @@ def execute_query(query, params=None, fetch=None, commit=True, silent=False):
         return result
     except Exception as e:
         if commit:
-            conn.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                pass
         if not silent:
             print(f"[DB Error] Query: {query} | Error: {e}")
         raise e
     finally:
-        conn.close()
+        release_connection(conn, is_sqlite, is_pooled)
 
 def check_column_exists(table_name, column_name):
     """
     Checks if a column exists in a database table without raising log errors.
     """
-    conn, is_sqlite = get_connection()
+    conn, is_sqlite, is_pooled = get_connection()
     try:
         cur = conn.cursor()
         if is_sqlite:
@@ -121,7 +183,7 @@ def check_column_exists(table_name, column_name):
         print(f"[DB Migration Check] Error checking column: {e}")
         return False
     finally:
-        conn.close()
+        release_connection(conn, is_sqlite, is_pooled)
 
 def init_db():
     """
