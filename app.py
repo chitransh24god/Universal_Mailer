@@ -1539,12 +1539,12 @@ def background_tracker():
 
 @app.on_event("startup")
 async def startup():
-    init_db()
+    threading.Thread(target=init_db, daemon=True).start()
     threading.Thread(target=background_tracker, daemon=True).start()
     threading.Thread(target=auto_register_webhooks, daemon=True).start()
     threading.Thread(target=auto_resume_campaigns, daemon=True).start()
     threading.Thread(target=keep_alive_pinger, daemon=True).start()
-    print("[Tracker] Background thread started")
+    print("[Tracker] Background threads started asynchronously")
 
 def auto_resume_campaigns():
     import json
