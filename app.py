@@ -48,13 +48,23 @@ DAILY_LIMIT = 1500  # Default fallback global limit
 DELAY_MIN_SECS = 60
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "Mybankloan.ai")
 
+_pwd_cache = {"val": DASHBOARD_PASSWORD, "ts": 0}
+_user_identity_cache = {}
+
 def get_dashboard_password():
+    now = time.time()
+    if now - _pwd_cache["ts"] < 60 and _pwd_cache["val"]:
+        return _pwd_cache["val"]
     try:
         row = execute_query("SELECT value FROM global_settings WHERE key='dashboard_password';", fetch="one")
         if row and row["value"]:
+            _pwd_cache["val"] = row["value"]
+            _pwd_cache["ts"] = now
             return row["value"]
     except Exception:
         pass
+    _pwd_cache["val"] = DASHBOARD_PASSWORD
+    _pwd_cache["ts"] = now
     return DASHBOARD_PASSWORD
 
 def get_user_identity(pwd_or_token: str = ""):
@@ -70,6 +80,12 @@ def get_user_identity(pwd_or_token: str = ""):
             "role": "admin",
             "access": ["*"]
         }
+    
+    now = time.time()
+    cached = _user_identity_cache.get(pwd_str)
+    if cached and (now - cached["ts"] < 60):
+        return cached["data"]
+
     try:
         user = execute_query(
             "SELECT id, username, email, password, role, active FROM users WHERE (username=%s OR email=%s OR CAST(id AS TEXT)=%s) AND active=TRUE;",
@@ -86,13 +102,15 @@ def get_user_identity(pwd_or_token: str = ""):
                     fetch="all"
                 ) or []
                 access_list = [r["sender_identifier"] for r in acc_rows]
-            return {
+            res_data = {
                 "id": user["id"],
                 "username": user["username"],
                 "email": user["email"],
                 "role": user.get("role", "user"),
                 "access": access_list
             }
+            _user_identity_cache[pwd_str] = {"data": res_data, "ts": now}
+            return res_data
     except Exception as e:
         print(f"[Auth Identity Error] {e}")
     return None
@@ -1735,10 +1753,19 @@ async def get_senders(pwd: str = "", all_senders: bool = False):
                     "bounced": int(s.get("total_bounced") or 0)
                 }
 
+        # Batch fetch today's sent stats in ONE query instead of looping N times
+        today_stats = execute_query("""
+            SELECT sender_email, COUNT(*) as cnt
+            FROM sent_emails
+            WHERE sent_at >= CURRENT_DATE
+            GROUP BY sender_email;
+        """, fetch="all")
+        today_map = {s["sender_email"]: int(s.get("cnt") or 0) for s in today_stats} if today_stats else {}
+
         result = []
         for r in rows:
             d = dict(r)
-            d["sent_today"] = get_sender_today_sent(d["email"])
+            d["sent_today"] = today_map.get(d["email"], 0)
             st = stats_map.get(d["email"], {"sent": 0, "bounced": 0})
             sent_cnt = st["sent"]
             bounced_cnt = st["bounced"]
@@ -2923,20 +2950,77 @@ async def get_users_api(pwd: str = ""):
     u = get_user_identity(pwd)
     if not u or u.get("role") != "admin":
         return JSONResponse(status_code=403, content={"error": "Admin access required"})
-    users = execute_query("SELECT id, username, email, role, active, created_at FROM users ORDER BY id ASC;", fetch="all") or []
-    res = []
-    for usr in users:
-        acc_rows = execute_query("SELECT sender_identifier FROM user_sender_access WHERE user_id=%s;", [usr["id"]], fetch="all") or []
-        res.append({
-            "id": usr["id"],
-            "username": usr["username"],
-            "email": usr["email"],
-            "role": usr["role"],
-            "active": usr["active"],
-            "created_at": str(usr.get("created_at", "")),
-            "access": [r["sender_identifier"] for r in acc_rows]
-        })
-    return JSONResponse({"users": res})
+    try:
+        users = execute_query("SELECT id, username, email, role, active, created_at FROM users ORDER BY id ASC;", fetch="all") or []
+        all_access = execute_query("SELECT user_id, sender_identifier FROM user_sender_access;", fetch="all") or []
+        access_by_user = {}
+        for row in all_access:
+            access_by_user.setdefault(row["user_id"], []).append(row["sender_identifier"])
+            
+        res = []
+        for usr in users:
+            res.append({
+                "id": usr["id"],
+                "username": usr["username"],
+                "email": usr["email"],
+                "role": usr["role"],
+                "active": usr["active"],
+                "created_at": str(usr.get("created_at", "")),
+                "access": access_by_user.get(usr["id"], [])
+            })
+        return JSONResponse({"users": res})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/api/top-templates")
+async def top_templates_api(pwd: str = ""):
+    """Return top performing templates directly computed in DB."""
+    try:
+        is_admin, allowed = get_user_allowed_senders(pwd)
+        if not is_admin and not allowed:
+            return JSONResponse([])
+        
+        if not is_admin:
+            rows = execute_query("""
+                SELECT 
+                    subject,
+                    COUNT(*) as sent,
+                    SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) as opened
+                FROM sent_emails
+                WHERE subject IS NOT NULL AND subject != '' AND sender_email IN %s
+                GROUP BY subject
+                HAVING COUNT(*) >= 5
+                ORDER BY (SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END)::FLOAT / COUNT(*)) DESC
+                LIMIT 5;
+            """, [tuple(allowed)], fetch="all") or []
+        else:
+            rows = execute_query("""
+                SELECT 
+                    subject,
+                    COUNT(*) as sent,
+                    SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END) as opened
+                FROM sent_emails
+                WHERE subject IS NOT NULL AND subject != ''
+                GROUP BY subject
+                HAVING COUNT(*) >= 5
+                ORDER BY (SUM(CASE WHEN opened=TRUE THEN 1 ELSE 0 END)::FLOAT / COUNT(*)) DESC
+                LIMIT 5;
+            """, fetch="all") or []
+            
+        res = []
+        for r in rows:
+            sent = int(r["sent"] or 0)
+            opened = int(r["opened"] or 0)
+            rate = round((opened / max(1, sent)) * 100)
+            res.append({
+                "name": r["subject"],
+                "sent": sent,
+                "opened": opened,
+                "rate": rate
+            })
+        return JSONResponse(res)
+    except Exception as e:
+        return JSONResponse([])
 
 @app.post("/api/users")
 async def create_user_api(request: Request, pwd: str = ""):

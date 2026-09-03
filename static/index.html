@@ -2021,6 +2021,12 @@ select.form-control {
             } else if (tabName === 'settings') {
                 loadSettingsData();
                 loadGlobalSettings();
+            } else if (tabName === 'crm') {
+                loadCrmTasks();
+                if (currentUser && currentUser.role === 'admin') {
+                    loadUsers();
+                    reloadCrmChecklist();
+                }
             }
         }
         
@@ -2121,103 +2127,100 @@ select.form-control {
             document.querySelector('.sidebar').classList.toggle('collapsed');
         }
 
-        // ── DASHBOARD KPIs ────────────────────────────────
+        // ── DASHBOARD KPIs (Parallel Fast Async Loading) ───
         async function loadDashboardData() {
             const pwd = getPwd();
-            try {
-                const actResp = await fetch('/api/activity-chart?pwd=' + encodeURIComponent(pwd));
-                const actData = await actResp.json();
-                renderActivityChart(actData);
-            } catch(e) { console.log('Activity chart:', e); }
-            try {
-                const r = await fetch('/api/tracking-summary?pwd=' + encodeURIComponent(pwd));
-                const data = await r.json();
-                const total = data.total_sent || 0;
-                const opened = data.total_opened || 0;
-                const replied = data.total_replied || 0;
-                const bounced = data.total_bounced || 0;
-                const openRate = total > 0 ? ((opened / total) * 100).toFixed(1) : '0.0';
-                const replyRate = total > 0 ? ((replied / total) * 100).toFixed(1) : '0.0';
-                const bounceRate = total > 0 ? ((bounced / total) * 100).toFixed(1) : '0.0';
-                const el = (id) => document.getElementById(id);
-                if (el('kpi-open-rate')) el('kpi-open-rate').textContent = openRate + '%';
-                if (el('kpi-reply-rate')) el('kpi-reply-rate').textContent = replyRate + '%';
-                if (el('kpi-total-sent')) el('kpi-total-sent').textContent = total.toLocaleString();
-                if (el('kpi-bounce-rate')) el('kpi-bounce-rate').textContent = bounceRate + '%';
-                const score = Math.min(100, Math.round(50 + (parseFloat(openRate) * 2)));
-                if (el('delivery-score-val')) el('delivery-score-val').textContent = score;
-                if (el('score-arc')) el('score-arc').setAttribute('stroke-dasharray', score + ' 100');
-            } catch(e) { console.log('Dashboard KPI load:', e); }
+            const encPwd = encodeURIComponent(pwd);
 
-            try {
-                const sr = await fetch('/api/senders?pwd=' + encodeURIComponent(pwd));
-                const senders = await sr.json();
-                const qList = document.getElementById('sender-quota-list');
-                if (qList && senders.length) {
-                    senders.sort((a,b) => (b.sent_today||0) - (a.sent_today||0));
-                    qList.innerHTML = senders.map(s => {
-                        const sent = s.sent_today || 0;
-                        const limit = s.daily_limit || 300;
-                        const pct = Math.min(100, Math.round((sent / limit) * 100));
-                        const color = pct >= 100 ? '#dc2626' : pct >= 75 ? '#d97706' : '#059669';
-                        return `<div>
-                            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                                <span style="font-size:12px;font-weight:600;color:#334155;">${s.email.split('@')[0]}</span>
-                                <span style="font-size:12px;color:${color};font-weight:700;">${sent}/${limit}</span>
-                            </div>
-                            <div class="prog-track">
-                                <div style="background:${color};height:100%;width:${pct}%;border-radius:99px;transition:width 0.5s;"></div>
-                            </div>
-                        </div>`;
-                    }).join('');
-                } else if (qList) {
-                    qList.innerHTML = '<div class="text-muted text-sm">No senders assigned</div>';
-                }
-            } catch(e) { console.log('Sender quota:', e); }
+            // Parallel fetch for all dashboard widgets
+            const p1 = fetch('/api/activity-chart?pwd=' + encPwd)
+                .then(r => r.json())
+                .then(actData => renderActivityChart(actData))
+                .catch(e => console.log('Activity chart:', e));
 
-            try {
-                const cr = await fetch('/api/campaign-history?pwd=' + encodeURIComponent(pwd));
-                const camps = await cr.json();
-                const cList = document.getElementById('recent-campaigns-list');
-                if (cList && camps.length) {
-                    cList.innerHTML = camps.slice(0,5).map(c => `
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);">
-                            <div>
-                                <div style="font-size:12px;font-weight:600;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;" title="${c.template || ''}">${c.template || 'Campaign'}</div>
-                                <div style="font-size:10px;color:#94a3b8;">${c.counter_date || c.date || ''}</div>
-                            </div>
-                            <div style="font-size:13px;font-weight:700;color:#6366f1;">${c.total_rows || '—'}</div>
-                        </div>`).join('');
-                } else if (cList) {
-                    cList.innerHTML = '<div class="text-muted text-sm" style="padding:8px 0;">No campaigns yet</div>';
-                }
-            } catch(e) { console.log('Campaign history:', e); }
+            const p2 = fetch('/api/tracking-summary?pwd=' + encPwd)
+                .then(r => r.json())
+                .then(data => {
+                    const total = data.total_sent || 0;
+                    const opened = data.total_opened || 0;
+                    const replied = data.total_replied || 0;
+                    const bounced = data.total_bounced || 0;
+                    const openRate = total > 0 ? ((opened / total) * 100).toFixed(1) : '0.0';
+                    const replyRate = total > 0 ? ((replied / total) * 100).toFixed(1) : '0.0';
+                    const bounceRate = total > 0 ? ((bounced / total) * 100).toFixed(1) : '0.0';
+                    const el = (id) => document.getElementById(id);
+                    if (el('kpi-open-rate')) el('kpi-open-rate').textContent = openRate + '%';
+                    if (el('kpi-reply-rate')) el('kpi-reply-rate').textContent = replyRate + '%';
+                    if (el('kpi-total-sent')) el('kpi-total-sent').textContent = total.toLocaleString();
+                    if (el('kpi-bounce-rate')) el('kpi-bounce-rate').textContent = bounceRate + '%';
+                    const score = Math.min(100, Math.round(50 + (parseFloat(openRate) * 2)));
+                    if (el('delivery-score-val')) el('delivery-score-val').textContent = score;
+                    if (el('score-arc')) el('score-arc').setAttribute('stroke-dasharray', score + ' 100');
+                })
+                .catch(e => console.log('Dashboard KPI load:', e));
 
-            try {
-                const tr = await fetch('/tracking-stats?filter=all&limit=1000&pwd=' + encodeURIComponent(pwd));
-                const tdata = await tr.json();
-                const rows = tdata.emails || [];
-                const tmap = {};
-                rows.forEach(r => {
-                    const k = r.subject || 'Unknown';
-                    if (!tmap[k]) tmap[k] = { sent: 0, opened: 0 };
-                    tmap[k].sent++;
-                    if (r.opened) tmap[k].opened++;
-                });
-                const sorted = Object.entries(tmap).sort((a,b) => (b[1].opened/Math.max(1,b[1].sent)) - (a[1].opened/Math.max(1,a[1].sent))).slice(0,5);
-                const ttList = document.getElementById('top-templates-list');
-                if (ttList && sorted.length) {
-                    ttList.innerHTML = sorted.map(([name, d]) => {
-                        const rate = d.sent > 0 ? ((d.opened/d.sent)*100).toFixed(0) : 0;
-                        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);">
-                            <span style="font-size:12px;color:#334155;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;" title="${name}">${name}</span>
-                            <span style="font-size:12px;font-weight:700;color:#059669;">${rate}%</span>
-                        </div>`;
-                    }).join('');
-                } else if (ttList) {
-                    ttList.innerHTML = '<div class="text-muted text-sm">No data yet</div>';
-                }
-            } catch(e) { console.log('Top templates:', e); }
+            const p3 = (sendersList && sendersList.length > 0 ? Promise.resolve(sendersList) : fetch('/api/senders?pwd=' + encPwd).then(r => r.json()))
+                .then(senders => {
+                    const qList = document.getElementById('sender-quota-list');
+                    if (qList && senders && senders.length) {
+                        const sorted = [...senders].sort((a,b) => (b.sent_today||0) - (a.sent_today||0));
+                        qList.innerHTML = sorted.map(s => {
+                            const sent = s.sent_today || 0;
+                            const limit = s.daily_limit || 300;
+                            const pct = Math.min(100, Math.round((sent / limit) * 100));
+                            const color = pct >= 100 ? '#dc2626' : pct >= 75 ? '#d97706' : '#059669';
+                            return `<div>
+                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                    <span style="font-size:12px;font-weight:600;color:#334155;">${s.email.split('@')[0]}</span>
+                                    <span style="font-size:12px;color:${color};font-weight:700;">${sent}/${limit}</span>
+                                </div>
+                                <div class="prog-track">
+                                    <div style="background:${color};height:100%;width:${pct}%;border-radius:99px;transition:width 0.5s;"></div>
+                                </div>
+                            </div>`;
+                        }).join('');
+                    } else if (qList) {
+                        qList.innerHTML = '<div class="text-muted text-sm">No senders assigned</div>';
+                    }
+                })
+                .catch(e => console.log('Sender quota:', e));
+
+            const p4 = fetch('/api/campaign-history?pwd=' + encPwd)
+                .then(r => r.json())
+                .then(camps => {
+                    const cList = document.getElementById('recent-campaigns-list');
+                    if (cList && camps && camps.length) {
+                        cList.innerHTML = camps.slice(0,5).map(c => `
+                            <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);">
+                                <div>
+                                    <div style="font-size:12px;font-weight:600;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;" title="${c.template || ''}">${c.template || 'Campaign'}</div>
+                                    <div style="font-size:10px;color:#94a3b8;">${c.counter_date || c.date || ''}</div>
+                                </div>
+                                <div style="font-size:13px;font-weight:700;color:#6366f1;">${c.total_rows || '—'}</div>
+                            </div>`).join('');
+                    } else if (cList) {
+                        cList.innerHTML = '<div class="text-muted text-sm" style="padding:8px 0;">No campaigns yet</div>';
+                    }
+                })
+                .catch(e => console.log('Campaign history:', e));
+
+            const p5 = fetch('/api/top-templates?pwd=' + encPwd)
+                .then(r => r.json())
+                .then(sorted => {
+                    const ttList = document.getElementById('top-templates-list');
+                    if (ttList && sorted && sorted.length) {
+                        ttList.innerHTML = sorted.map(d => `
+                            <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);">
+                                <span style="font-size:12px;color:#334155;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;" title="${d.name}">${d.name}</span>
+                                <span style="font-size:12px;font-weight:700;color:#059669;">${d.rate}%</span>
+                            </div>`).join('');
+                    } else if (ttList) {
+                        ttList.innerHTML = '<div class="text-muted text-sm">No data yet</div>';
+                    }
+                })
+                .catch(e => console.log('Top templates:', e));
+
+            await Promise.all([p1, p2, p3, p4, p5]);
         }
 
         // ── CRM USER & RBAC IDENTITIES ────────────────────
@@ -2277,18 +2280,14 @@ select.form-control {
             const addTaskCard = document.getElementById('crm-add-task-card');
             if (addUsrCard) addUsrCard.style.display = isAdmin ? 'block' : 'none';
             if (addTaskCard) addTaskCard.style.display = isAdmin ? 'block' : 'none';
-
-            loadCrmTasks();
-            if (isAdmin) {
-                loadUsers();
-                reloadCrmChecklist();
-            }
         }
 
         // ── LAUNCH CAMPAIGN & INITIAL DATA ────────────────
         async function initData() {
-            await initUserIdentity();
-            await loadSenders();
+            await Promise.all([
+                initUserIdentity(),
+                loadSenders()
+            ]);
             filterTemplatesBySender();
             startPolling();
         }

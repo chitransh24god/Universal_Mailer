@@ -406,6 +406,17 @@ def init_db():
         );
     """)
 
+    # 14. User Sender Access Mapping Table (RBAC)
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS user_sender_access (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            sender_identifier TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (user_id, sender_identifier)
+        );
+    """)
+
     # 15. User Tasks Assignment Table
     execute_query("""
         CREATE TABLE IF NOT EXISTS user_tasks (
