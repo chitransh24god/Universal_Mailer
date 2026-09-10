@@ -225,31 +225,46 @@ def _valid_email_count(series):
 def smart_parse_excel(file_bytes):
     best_df = None
     best_email = None
+    best_header = 0
     best_score = 0
-    for hrow in range(5):
-        try:
-            df = pd.read_excel(io.BytesIO(file_bytes), header=hrow, dtype=str)
-            df.columns = [str(c).strip() for c in df.columns]
-            df = df.dropna(how='all').reset_index(drop=True)
-            if df.empty:
+    is_excel = False
+
+    # 1. First attempt fast Excel inspection
+    try:
+        bio = io.BytesIO(file_bytes)
+        for hrow in range(4):
+            try:
+                sample_df = pd.read_excel(bio, header=hrow, nrows=10, dtype=str)
+                sample_df.columns = [str(c).strip() for c in sample_df.columns]
+                email_col = _find_col(sample_df.columns.tolist(), EMAIL_ALIASES)
+                if not email_col:
+                    for col in sample_df.columns:
+                        if _valid_email_count(sample_df[col]) > 0:
+                            email_col = col
+                            break
+                if email_col:
+                    score = _valid_email_count(sample_df[email_col]) + 10
+                    if score > best_score:
+                        best_score = score
+                        best_header = hrow
+                        best_email = email_col
+                        is_excel = True
+            except Exception:
                 continue
-            email_col = _find_col(df.columns.tolist(), EMAIL_ALIASES)
-            if not email_col:
-                for col in df.columns:
-                    if _valid_email_count(df[col]) > 0:
-                        email_col = col
-                        break
-            if not email_col:
-                continue
-            score = _valid_email_count(df[email_col])
-            if score > best_score:
-                best_score = score
-                best_df = df.copy()
-                best_email = email_col
-        except Exception:
-            continue
-            
-    if best_df is None:
+            finally:
+                bio.seek(0)
+                
+        if is_excel:
+            best_df = pd.read_excel(bio, header=best_header, dtype=str)
+            best_df.columns = [str(c).strip() for c in best_df.columns]
+            best_df = best_df.dropna(how='all').reset_index(drop=True)
+            if best_email not in best_df.columns:
+                best_email = _find_col(best_df.columns.tolist(), EMAIL_ALIASES)
+    except Exception:
+        pass
+
+    # 2. Fallback to CSV if not Excel
+    if best_df is None or best_email is None:
         for enc in ['utf-8', 'latin-1', 'cp1252', 'utf-8-sig']:
             try:
                 df = pd.read_csv(io.BytesIO(file_bytes), encoding=enc, dtype=str)
@@ -262,14 +277,12 @@ def smart_parse_excel(file_bytes):
                             email_col = col
                             break
                 if email_col:
-                    score = _valid_email_count(df[email_col])
-                    if score > 0:
-                        best_df = df.copy()
-                        best_email = email_col
-                        break
+                    best_df = df.copy()
+                    best_email = email_col
+                    break
             except Exception:
                 continue
-                
+
     if best_df is None or best_email is None:
         raise ValueError("Excel ya CSV file mein koi valid Email column nahi mila! Kripya check karein ki file mein Email addresses hain.")
     

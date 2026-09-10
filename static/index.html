@@ -2308,19 +2308,35 @@ select.form-control {
             
             btn.disabled = true;
             btn.innerHTML = '<span class="clock-dot" style="display:inline-block;margin-right:6px;"></span> Launching & Uploading...';
-            if (msgBox) msgBox.style.display = 'none';
+            if (msgBox) {
+                msgBox.style.display = 'block';
+                msgBox.style.background = '#eff6ff';
+                msgBox.style.color = '#1e40af';
+                msgBox.style.border = '1px solid #bfdbfe';
+                msgBox.textContent = '⏳ Uploading contacts list and initializing campaign... Please wait.';
+            }
             
             try {
                 const res = await fetch('/send-emails/?pwd=' + encodeURIComponent(pwd), {
                     method: 'POST',
                     body: formData,
-                    headers: { 'Accept': 'application/json' }
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
                 });
-                const data = await res.json();
-                btn.disabled = false;
-                btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg> Start / Schedule Campaign`;
                 
-                if (data.ok) {
+                let data = null;
+                const contentType = res.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    data = await res.json();
+                } else {
+                    const text = await res.text();
+                    try {
+                        data = JSON.parse(text);
+                    } catch(e) {
+                        data = { ok: res.ok, message: text };
+                    }
+                }
+                
+                if (data && data.ok) {
                     if (msgBox) {
                         msgBox.style.display = 'block';
                         msgBox.style.background = '#f0fdf4';
@@ -2333,28 +2349,30 @@ select.form-control {
                     switchTab('monitor', document.getElementById('nav-monitor'));
                     fetchStatus();
                 } else {
+                    const errText = (data && (data.error || data.message)) ? (data.error || data.message) : `Server error (Status: ${res.status})`;
                     if (msgBox) {
                         msgBox.style.display = 'block';
                         msgBox.style.background = '#fef2f2';
                         msgBox.style.color = '#b91c1c';
                         msgBox.style.border = '1px solid #fecaca';
-                        msgBox.textContent = '❌ Launch Failed: ' + (data.error || data.message || 'Unknown error');
+                        msgBox.textContent = '❌ Launch Failed: ' + errText;
                     } else {
-                        alert('Launch failed: ' + (data.error || data.message));
+                        alert('Launch failed: ' + errText);
                     }
                 }
             } catch (err) {
-                btn.disabled = false;
-                btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg> Start / Schedule Campaign`;
                 if (msgBox) {
                     msgBox.style.display = 'block';
                     msgBox.style.background = '#fef2f2';
                     msgBox.style.color = '#b91c1c';
                     msgBox.style.border = '1px solid #fecaca';
-                    msgBox.textContent = '❌ Error: ' + err;
+                    msgBox.textContent = '❌ Upload / Network Error: ' + err;
                 } else {
                     alert('Error: ' + err);
                 }
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg> Start / Schedule Campaign`;
             }
         }
 
