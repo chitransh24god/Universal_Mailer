@@ -1299,15 +1299,11 @@ def poll_replies():
             continue
             
         try:
-            old_to = socket.getdefaulttimeout()
-            socket.setdefaulttimeout(10)
             print(f"[IMAP] Connecting {sender_email} -> {imap_host}:{imap_port}")
-            
             import ssl
             context = ssl._create_unverified_context()
-            mail = imaplib.IMAP4_SSL(imap_host, int(imap_port), ssl_context=context)
+            mail = imaplib.IMAP4_SSL(imap_host, int(imap_port), ssl_context=context, timeout=10)
             mail.login(sender_email, imap_pass)
-            socket.setdefaulttimeout(old_to)
             
             _, select_data = mail.select("INBOX")
             total_emails = int(select_data[0]) if select_data and select_data[0] else 0
