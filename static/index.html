@@ -1076,7 +1076,9 @@ select.form-control {
               ⚠️ This account sends via Gmail SMTP. Please ensure an App Password is configured.
             </div>
 
-            <form action="/send-emails/" method="post" enctype="multipart/form-data" onsubmit="return confirm('Launch this campaign now?')">
+            <div id="launch-msg-box" style="display:none;margin-bottom:14px;padding:12px;border-radius:8px;font-size:14px;"></div>
+
+            <form id="launch-campaign-form" onsubmit="submitCampaignForm(event)" enctype="multipart/form-data">
 
               <div class="form-group">
                 <label class="form-label">Sender Account</label>
@@ -1094,8 +1096,8 @@ select.form-control {
               </div>
 
               <div class="form-group">
-                <label class="form-label">Recipients File (.xlsx)</label>
-                <input type="file" name="file" accept=".xlsx,.xls" required class="form-control" style="padding:6px 12px;cursor:pointer;">
+                <label class="form-label">Recipients File (.xlsx, .xls, .csv)</label>
+                <input type="file" name="file" accept=".xlsx,.xls,.csv" required class="form-control" style="padding:6px 12px;cursor:pointer;">
               </div>
 
               <!-- Advanced Scheduling toggle -->
@@ -1149,7 +1151,7 @@ select.form-control {
                   <div style="margin-top:12px;">
                     <label class="check-label">
                       <input type="checkbox" name="ignore_working_hours" value="true">
-                      ?? <strong>Ignore Working Hours</strong> (Send continuously 24/7)
+                      ⚡ <strong>Ignore Working Hours</strong> (Send continuously 24/7)
                     </label>
                   </div>
 
@@ -1176,7 +1178,7 @@ select.form-control {
                 </div>
               </div>
 
-              <button type="submit" class="btn btn-primary btn-full btn-lg">
+              <button type="submit" id="launch-submit-btn" class="btn btn-primary btn-full btn-lg">
                 <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
                 Start / Schedule Campaign
               </button>
@@ -2290,6 +2292,70 @@ select.form-control {
             ]);
             filterTemplatesBySender();
             startPolling();
+        }
+
+        async function submitCampaignForm(event) {
+            event.preventDefault();
+            const form = event.target;
+            const btn = document.getElementById('launch-submit-btn');
+            const msgBox = document.getElementById('launch-msg-box');
+            
+            if (!confirm('Launch this campaign now?')) return;
+            
+            const formData = new FormData(form);
+            const pwd = getPwd();
+            formData.append('pwd', pwd);
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="clock-dot" style="display:inline-block;margin-right:6px;"></span> Launching & Uploading...';
+            if (msgBox) msgBox.style.display = 'none';
+            
+            try {
+                const res = await fetch('/send-emails/?pwd=' + encodeURIComponent(pwd), {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await res.json();
+                btn.disabled = false;
+                btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg> Start / Schedule Campaign`;
+                
+                if (data.ok) {
+                    if (msgBox) {
+                        msgBox.style.display = 'block';
+                        msgBox.style.background = '#f0fdf4';
+                        msgBox.style.color = '#166534';
+                        msgBox.style.border = '1px solid #bbf7d0';
+                        msgBox.textContent = '✅ ' + (data.message || 'Campaign launched successfully!');
+                    }
+                    form.reset();
+                    // Switch to Live Monitor tab immediately!
+                    switchTab('monitor', document.getElementById('nav-monitor'));
+                    fetchStatus();
+                } else {
+                    if (msgBox) {
+                        msgBox.style.display = 'block';
+                        msgBox.style.background = '#fef2f2';
+                        msgBox.style.color = '#b91c1c';
+                        msgBox.style.border = '1px solid #fecaca';
+                        msgBox.textContent = '❌ Launch Failed: ' + (data.error || data.message || 'Unknown error');
+                    } else {
+                        alert('Launch failed: ' + (data.error || data.message));
+                    }
+                }
+            } catch (err) {
+                btn.disabled = false;
+                btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg> Start / Schedule Campaign`;
+                if (msgBox) {
+                    msgBox.style.display = 'block';
+                    msgBox.style.background = '#fef2f2';
+                    msgBox.style.color = '#b91c1c';
+                    msgBox.style.border = '1px solid #fecaca';
+                    msgBox.textContent = '❌ Error: ' + err;
+                } else {
+                    alert('Error: ' + err);
+                }
+            }
         }
 
         async function loadSenders() {

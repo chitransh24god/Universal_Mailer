@@ -235,6 +235,11 @@ def smart_parse_excel(file_bytes):
                 continue
             email_col = _find_col(df.columns.tolist(), EMAIL_ALIASES)
             if not email_col:
+                for col in df.columns:
+                    if _valid_email_count(df[col]) > 0:
+                        email_col = col
+                        break
+            if not email_col:
                 continue
             score = _valid_email_count(df[email_col])
             if score > best_score:
@@ -243,8 +248,30 @@ def smart_parse_excel(file_bytes):
                 best_email = email_col
         except Exception:
             continue
+            
+    if best_df is None:
+        for enc in ['utf-8', 'latin-1', 'cp1252', 'utf-8-sig']:
+            try:
+                df = pd.read_csv(io.BytesIO(file_bytes), encoding=enc, dtype=str)
+                df.columns = [str(c).strip() for c in df.columns]
+                df = df.dropna(how='all').reset_index(drop=True)
+                email_col = _find_col(df.columns.tolist(), EMAIL_ALIASES)
+                if not email_col:
+                    for col in df.columns:
+                        if _valid_email_count(df[col]) > 0:
+                            email_col = col
+                            break
+                if email_col:
+                    score = _valid_email_count(df[email_col])
+                    if score > 0:
+                        best_df = df.copy()
+                        best_email = email_col
+                        break
+            except Exception:
+                continue
+                
     if best_df is None or best_email is None:
-        raise ValueError("Excel mein koi Email column nahi mila! Column ka naam Email, Mail, E-mail, Email ID etc. hona chahiye.")
+        raise ValueError("Excel ya CSV file mein koi valid Email column nahi mila! Kripya check karein ki file mein Email addresses hain.")
     
     df = best_df
     cols = df.columns.tolist()
@@ -2739,6 +2766,13 @@ async def send_emails(request: Request, sender_email: str = Form(...), category:
             
     # Launch campaign immediately
     count, err = await _launch_campaign(sender_email, category, file, base_url, campaign_name or "", timezone, start_hour, end_hour, working_days)
+    
+    accept = request.headers.get("accept", "")
+    if "application/json" in accept or request.headers.get("x-requested-with") == "XMLHttpRequest":
+        if err:
+            return JSONResponse(status_code=400, content={"ok": False, "error": err})
+        return JSONResponse({"ok": True, "count": count, "sender": sender_email, "message": f"Campaign successfully launched from {sender_email} — {count} recipients loaded!"})
+
     if err:
         return HTMLResponse(f'<html><head><meta http-equiv="refresh" content="4;url=/"></head>'
                             f'<body style="font-family:sans-serif;background:#fff1f0;color:#b42318;padding:40px;text-align:center;font-size:16px;">'
