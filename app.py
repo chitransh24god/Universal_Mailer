@@ -2458,11 +2458,19 @@ async def replies_list(limit: int = 200, include_bounces: bool = False, pwd: str
         import traceback
         return JSONResponse(status_code=500, content={"error": str(e), "traceback": traceback.format_exc()})
 
+_tracking_summary_cache = {}
+
 @app.get("/api/tracking-summary")
 async def tracking_summary(pwd: str = ""):
     """Return all-time KPI totals for the Dashboard panel, scoped by user."""
     try:
         is_admin, allowed = get_user_allowed_senders(pwd)
+        cache_key = "admin" if is_admin else ",".join(sorted(allowed or []))
+        now = time.time()
+        cached = _tracking_summary_cache.get(cache_key)
+        if cached and (now - cached["ts"] < 15):
+            return JSONResponse(cached["data"])
+
         if not is_admin:
             if not allowed:
                 return JSONResponse({"total_sent": 0, "total_opened": 0, "total_replied": 0, "total_bounced": 0})
@@ -2484,14 +2492,14 @@ async def tracking_summary(pwd: str = ""):
                     SUM(CASE WHEN bounced = TRUE THEN 1 ELSE 0 END) AS total_bounced
                 FROM sent_emails;
             """, fetch="one")
-        if row:
-            return JSONResponse({
-                "total_sent":    int(row.get("total_sent") or 0),
-                "total_opened":  int(row.get("total_opened") or 0),
-                "total_replied": int(row.get("total_replied") or 0),
-                "total_bounced": int(row.get("total_bounced") or 0),
-            })
-        return JSONResponse({"total_sent": 0, "total_opened": 0, "total_replied": 0, "total_bounced": 0})
+        res_data = {
+            "total_sent":    int(row.get("total_sent") or 0) if row else 0,
+            "total_opened":  int(row.get("total_opened") or 0) if row else 0,
+            "total_replied": int(row.get("total_replied") or 0) if row else 0,
+            "total_bounced": int(row.get("total_bounced") or 0) if row else 0,
+        }
+        _tracking_summary_cache[cache_key] = {"data": res_data, "ts": now}
+        return JSONResponse(res_data)
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
