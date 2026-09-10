@@ -4305,6 +4305,13 @@ select.form-control {
             await initData();
             await loadDashboardData();
             loadSenderGroups();
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const targetTab = urlParams.get('tab');
+            if (targetTab) {
+                const navBtn = document.getElementById('nav-' + targetTab);
+                if (navBtn) switchTab(targetTab, navBtn);
+            }
         };
 </script>
 </body>

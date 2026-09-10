@@ -2736,10 +2736,12 @@ async def send_emails(request: Request, sender_email: str = Form(...), category:
     # Launch campaign immediately
     count, err = await _launch_campaign(sender_email, category, file, base_url, campaign_name or "", timezone, start_hour, end_hour, working_days)
     if err:
-        return JSONResponse(status_code=400, content={"status": "error", "message": err})
-    return HTMLResponse(f'<html><head><meta http-equiv="refresh" content="3;url=/"></head>'
-                        f'<body style="font-family:sans-serif;background:#f5f4f0;color:#4a6741;padding:40px;text-align:center;font-size:16px;">'
-                        f'Campaign launched from <b>{sender_email}</b> — {count} emails!</body></html>')
+        return HTMLResponse(f'<html><head><meta http-equiv="refresh" content="4;url=/"></head>'
+                            f'<body style="font-family:sans-serif;background:#fff1f0;color:#b42318;padding:40px;text-align:center;font-size:16px;">'
+                            f'⚠️ <b>Campaign Launch Failed:</b> {err}<br><br>Returning to dashboard in 4 seconds...</body></html>')
+    return HTMLResponse(f'<html><head><meta http-equiv="refresh" content="2;url=/?tab=monitor"></head>'
+                        f'<body style="font-family:sans-serif;background:#f0fdf4;color:#166534;padding:40px;text-align:center;font-size:16px;">'
+                        f'✅ Campaign successfully launched from <b>{sender_email}</b> — {count} recipients loaded!<br><br>Redirecting to Live Monitor...</body></html>')
 
 @app.post("/api/upload-attachment")
 async def upload_attachment(file: UploadFile = File(...)):
