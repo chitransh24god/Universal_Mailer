@@ -70,17 +70,17 @@ def get_connection():
     conn.row_factory = sqlite3.Row
     return conn, True, False
 
-def release_connection(conn, is_sqlite, is_pooled):
+def release_connection(conn, is_sqlite, is_pooled, is_broken=False):
     if not conn:
         return
     if is_pooled:
         try:
             db_pool = get_db_pool()
             if db_pool:
-                db_pool.putconn(conn)
+                db_pool.putconn(conn, close=is_broken)
                 return
-        except Exception as e:
-            print(f"[DB] Error putting connection back to pool: {e}")
+        except Exception:
+            pass
     try:
         conn.close()
     except Exception:
@@ -90,63 +90,73 @@ def execute_query(query, params=None, fetch=None, commit=True, silent=False):
     """
     Executes a query and handles differences between SQLite and PostgreSQL.
     Translates '%s' placeholder to '?' if SQLite is active.
+    Includes auto-retry on dropped/idle connections.
     """
     if params is None:
         params = []
     
-    conn, is_sqlite, is_pooled = get_connection()
-    try:
-        if is_sqlite:
-            # SQLite uses '?' placeholder instead of '%s'
-            query = query.replace("%s", "?")
-            query = query.replace("%%", "%")
-            # Replace SERIAL with INTEGER PRIMARY KEY AUTOINCREMENT in table creations
-
-            query = query.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
-            # Replace String aggregation functions
-            query = query.replace("STRING_AGG(stm.sender_email,', ' ORDER BY stm.sender_email)", "GROUP_CONCAT(stm.sender_email, ', ')")
-            query = query.replace("STRING_AGG(stm.sender_email, ', ')", "GROUP_CONCAT(stm.sender_email, ', ')")
-            # Replace Postgres INTERVAL syntax
-            query = query.replace("NOW()-INTERVAL '48 hours'", "datetime('now', '-48 hours')")
-            query = query.replace("NOW()-INTERVAL '48h'", "datetime('now', '-48 hours')")
-            query = query.replace("NOW()", "datetime('now')")
-            # CURRENT_DATE is natively supported by SQLite as DEFAULT CURRENT_DATE
-            
-            cur = conn.cursor()
-            cur.execute(query, params)
-        else:
-            # Postgres RealDictCursor returns dicts
-            cur = conn.cursor(cursor_factory=RealDictCursor)
-            cur.execute(query, params)
-            
-        result = None
-        if fetch == "all":
-            rows = cur.fetchall()
+    max_retries = 2
+    for attempt in range(max_retries):
+        conn, is_sqlite, is_pooled = get_connection()
+        is_broken = False
+        try:
             if is_sqlite:
-                result = [dict(row) for row in rows]
+                # SQLite uses '?' placeholder instead of '%s'
+                q = query.replace("%s", "?").replace("%%", "%")
+                q = q.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+                q = q.replace("STRING_AGG(stm.sender_email,', ' ORDER BY stm.sender_email)", "GROUP_CONCAT(stm.sender_email, ', ')")
+                q = q.replace("STRING_AGG(stm.sender_email, ', ')", "GROUP_CONCAT(stm.sender_email, ', ')")
+                q = q.replace("NOW()-INTERVAL '48 hours'", "datetime('now', '-48 hours')")
+                q = q.replace("NOW()-INTERVAL '48h'", "datetime('now', '-48 hours')")
+                q = q.replace("NOW()", "datetime('now')")
+                
+                cur = conn.cursor()
+                cur.execute(q, params)
             else:
+                cur = conn.cursor(cursor_factory=RealDictCursor)
+                cur.execute(query, params)
+                
+            result = None
+            if fetch == "all":
+                rows = cur.fetchall()
                 result = [dict(row) for row in rows]
-        elif fetch == "one":
-            row = cur.fetchone()
-            if row:
-                result = dict(row)
-        
-        if commit:
-            conn.commit()
+            elif fetch == "one":
+                row = cur.fetchone()
+                if row:
+                    result = dict(row)
             
-        cur.close()
-        return result
-    except Exception as e:
-        if commit:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-        if not silent:
-            print(f"[DB Error] Query: {query} | Error: {e}")
-        raise e
-    finally:
-        release_connection(conn, is_sqlite, is_pooled)
+            if commit:
+                conn.commit()
+                
+            cur.close()
+            release_connection(conn, is_sqlite, is_pooled, is_broken=False)
+            return result
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as conn_err:
+            is_broken = True
+            if commit:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+            release_connection(conn, is_sqlite, is_pooled, is_broken=True)
+            if attempt < max_retries - 1:
+                # Stale connection recovered, retry on fresh connection
+                continue
+            if not silent:
+                print(f"[DB Connection Error] {conn_err}")
+            raise conn_err
+        except Exception as e:
+            if commit:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+            release_connection(conn, is_sqlite, is_pooled, is_broken=is_broken)
+            if not silent:
+                # Sanitize error message to prevent secret leaking
+                sanitized_q = query.replace("\n", " ").strip()[:120]
+                print(f"[DB Error] Query: {sanitized_q}... | Error: {e}")
+            raise e
 
 def check_column_exists(table_name, column_name):
     """

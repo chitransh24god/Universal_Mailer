@@ -462,25 +462,31 @@ def secs_until_work(campaign_id=""):
         
     return max(0, int((target - now).total_seconds()))
 
+_mx_resolver = dns.resolver.Resolver()
+_mx_resolver.timeout = 1.5
+_mx_resolver.lifetime = 2.0
 _mx_cache = {}
 
 def check_domain_mx(email):
-    """Check if the email domain has valid MX records. Returns True if valid, False if guaranteed bounce."""
+    """Check if the email domain has valid MX records with non-blocking timeout."""
     try:
+        if not email or '@' not in email:
+            return False
         domain = email.split('@')[-1].lower().strip()
-        if not domain:
+        if not domain or '.' not in domain:
             return False
         if domain in _mx_cache:
             return _mx_cache[domain]
-        answers = dns.resolver.resolve(domain, 'MX')
+        answers = _mx_resolver.resolve(domain, 'MX')
         res = len(answers) > 0
         _mx_cache[domain] = res
         return res
-    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers, dns.exception.Timeout):
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
         _mx_cache[domain] = False
         return False
-    except Exception:
-        return True # Default to True on unknown errors to avoid false positives
+    except (dns.exception.Timeout, Exception):
+        # On timeout or unexpected error, return True to avoid false positive bounce drops
+        return True
 
 def auto_register_webhooks():
     try:
@@ -773,7 +779,7 @@ def run_group_campaign_parallel(df, email_col, email_subject, template_text, sen
         provider_type = sc.get("provider_type", "brevo").lower()
         delay_min = sc.get("delay_min") if sc.get("delay_min") is not None else DELAY_MIN_SECS
         delay_max = sc.get("delay_max") if sc.get("delay_max") is not None else DELAY_MAX_SECS
-        api_key = sc.get("api_key", "")
+        api_key = sc.get("api_key") or os.environ.get("BREVO_API_KEY") or os.environ.get("BREVO_API_KEY_3") or os.environ.get("BREVO_API_KEY_2") or ""
         daily_limit = sc.get("daily_limit") or daily_limit_group
         import secrets as _sec
 
@@ -964,10 +970,14 @@ def run_group_campaign_parallel(df, email_col, email_subject, template_text, sen
         print(f"Failed to delete active campaign: {e}")
 
 
-def run_campaign(df_dict, email_subject, template_text, email_col, sender_email, sender_name, campaign_id, category, base_url="", custom_campaign_name="", timezone="Asia/Kolkata", start_hour=10, end_hour=19, working_days="0,1,2,3,4,5", start_row=0):
+def run_campaign(df_or_dict, email_subject, template_text, email_col, sender_email, sender_name, campaign_id, category, base_url="", custom_campaign_name="", timezone="Asia/Kolkata", start_hour=10, end_hour=19, working_days="0,1,2,3,4,5", start_row=0):
 
     import secrets
-    df = pd.DataFrame(df_dict)
+    if isinstance(df_or_dict, pd.DataFrame):
+        df = df_or_dict.copy()
+    else:
+        df = pd.DataFrame(df_or_dict)
+        
     if 'Email' in df.columns:
         email_col = 'Email'
     total = len(df)
@@ -987,14 +997,19 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
         
     import json
     try:
-        df_json = json.dumps(df_dict)
+        # Lightweight metadata storage: Avoid sending 50MB raw json payloads to DB over wire
+        if total <= 100:
+            df_json = json.dumps(df.to_dict(orient="list"))
+        else:
+            df_json = json.dumps(df.head(50).to_dict(orient="list"))
+            
         execute_query("""
             INSERT INTO active_campaigns (campaign_id, sender_email, sender_name, category, email_subject, template_text, email_col, base_url, custom_campaign_name, timezone, start_hour, end_hour, working_days, df_dict, current_row, status)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'running')
             ON CONFLICT (campaign_id) DO UPDATE SET status='running';
         """, [campaign_id, sender_email, sender_name, category, email_subject, template_text, email_col, base_url, custom_campaign_name, timezone, start_hour, end_hour, working_days, df_json, start_row])
     except Exception as e:
-        print(f"Active campaign save error: {e}")
+        print(f"[Active Campaign Save Warning] {e}")
         
     campaign_name = custom_campaign_name if custom_campaign_name else f"{sender_email} - {datetime.now(IST).strftime('%d %b %Y, %I:%M %p')}"
         
@@ -1006,7 +1021,7 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
             [date.today(), sender_email, email_subject, total]
         )
     except Exception as e:
-        print(f"History logging error: {e}")
+        pass
         
     # Sender configuration / Group configuration setup
     is_group = False
@@ -1201,7 +1216,7 @@ def run_campaign(df_dict, email_subject, template_text, email_col, sender_email,
                 "textContent": body,
                 "replyTo": {"email": reply_email, "name": curr_sender_name},
             }
-            curr_api_key = curr_sender_config.get("api_key", "")
+            curr_api_key = curr_sender_config.get("api_key") or os.environ.get("BREVO_API_KEY") or os.environ.get("BREVO_API_KEY_3") or os.environ.get("BREVO_API_KEY_2") or ""
             try:
                 resp = requests.post(
                     BREVO_API_URL, json=payload,
@@ -1316,8 +1331,8 @@ def poll_replies():
                 body = ""
         return body[:500]
 
-    # Fetch active senders with IMAP credentials
-    accounts = execute_query("SELECT email, imap_host, imap_port, imap_password FROM sender_accounts WHERE active=TRUE AND imap_password != '';", fetch="all")
+    # Fetch active senders with valid non-empty IMAP credentials
+    accounts = execute_query("SELECT email, imap_host, imap_port, imap_password FROM sender_accounts WHERE active=TRUE AND imap_password IS NOT NULL AND TRIM(imap_password) != '';", fetch="all")
     if not accounts:
         return
         
@@ -1331,30 +1346,29 @@ def poll_replies():
 
     for acc in accounts:
         sender_email = acc["email"]
-        imap_host = acc["imap_host"]
-        imap_port = acc["imap_port"] or 993
-        imap_pass = acc["imap_password"]
+        imap_host = acc.get("imap_host", "").strip()
+        imap_port = acc.get("imap_port") or 993
+        imap_pass = str(acc.get("imap_password", "")).strip()
         
         if not imap_host or not imap_pass:
             continue
             
+        mail = None
         try:
-            print(f"[IMAP] Connecting {sender_email} -> {imap_host}:{imap_port}")
             import ssl
             context = ssl._create_unverified_context()
-            mail = imaplib.IMAP4_SSL(imap_host, int(imap_port), ssl_context=context, timeout=10)
+            mail = imaplib.IMAP4_SSL(imap_host, int(imap_port), ssl_context=context, timeout=8)
             mail.login(sender_email, imap_pass)
             
             _, select_data = mail.select("INBOX")
             total_emails = int(select_data[0]) if select_data and select_data[0] else 0
-            print(f"[IMAP] {sender_email} — Total emails: {total_emails}")
             
             if total_emails > 0:
                 start_seq = max(1, total_emails - 100)
                 _, header_data = mail.fetch(f"{start_seq}:{total_emails}", "(BODY[HEADER.FIELDS (IN-REPLY-TO REFERENCES FROM SUBJECT)])")
                 
                 parser = BytesHeaderParser()
-                for part in header_data:
+                for part in (header_data or []):
                     if isinstance(part, tuple):
                         msg_bytes = part[1]
                         msg = parser.parsebytes(msg_bytes)
@@ -1400,7 +1414,6 @@ def poll_replies():
                         ]) or "undeliverable" in subject.lower() or "failure notice" in subject.lower()
                         
                         if is_bounce:
-                            print(f"[IMAP Bounce] Bounce detected from {from_email} for sender {sender_email}")
                             try:
                                 _, body_data = mail.fetch(str(msg_seq), "(RFC822)")
                                 if body_data and body_data[0] and isinstance(body_data[0], tuple):
@@ -1411,9 +1424,9 @@ def poll_replies():
                                     action = "failed"
                                     
                                     # 1. Try formal DSN parsing
-                                    for part in full_msg.walk():
-                                        if part.get_content_type() == "message/delivery-status":
-                                            dsn_payload = part.get_payload()
+                                    for part_sub in full_msg.walk():
+                                        if part_sub.get_content_type() == "message/delivery-status":
+                                            dsn_payload = part_sub.get_payload()
                                             if isinstance(dsn_payload, list):
                                                 for dsn_part in dsn_payload:
                                                     for k, v in dsn_part.items():
@@ -1454,7 +1467,7 @@ def poll_replies():
                                     elif matched_token:
                                         execute_query("UPDATE sent_emails SET bounced=TRUE, bounced_at=COALESCE(bounced_at, NOW()), bounce_reason='Bounced (IMAP)', smtp_response=%s WHERE track_token=%s;", [diagnostic_code, matched_token])
                             except Exception as ex_b:
-                                print(f"[IMAP Bounce Parser Error] {ex_b}")
+                                pass
                             continue
 
                         if matched_token:
@@ -1463,8 +1476,6 @@ def poll_replies():
                             if dup and dup["c"] > 0:
                                 continue
                                 
-                            # Fetch full message body for matched sequence number
-                            print(f"[IMAP] Matched sequence {msg_seq}. Fetching full content...")
                             _, body_data = mail.fetch(str(msg_seq), "(RFC822)")
                             full_msg = _email_lib.message_from_bytes(body_data[0][1])
                             body_prev = get_body_preview(full_msg)
@@ -1478,9 +1489,16 @@ def poll_replies():
                                 [matched_token]
                             )
                             print(f"[IMAP] Reply recorded: {from_email} -> {sender_email}")
-            mail.logout()
+        except imaplib.IMAP4.error as auth_err:
+            print(f"[IMAP Notice] {sender_email} ({imap_host}): Authentication skipped ({auth_err}). Reply checking inactive for this account.")
         except Exception as e:
-            print(f"[IMAP error] {sender_email} ({imap_host}): {e}")
+            print(f"[IMAP Notice] {sender_email} ({imap_host}): {e}")
+        finally:
+            if mail:
+                try:
+                    mail.logout()
+                except Exception:
+                    pass
 
 def check_48hr_alerts():
     try:
@@ -1623,12 +1641,21 @@ def keep_alive_pinger():
     import requests
     while True:
         try:
-            time.sleep(600) # Ping every 10 mins
+            time.sleep(300) # Ping every 5 mins to keep Render service alive
+            port = os.environ.get("PORT", "8000")
+            try:
+                requests.get(f"http://127.0.0.1:{port}/health", timeout=5)
+            except Exception:
+                pass
+                
             row = execute_query("SELECT value FROM global_settings WHERE key='tracking_base_url';", fetch="one")
             if row and row["value"]:
                 base = row["value"].strip().rstrip('/')
-                if base and not 'localhost' in base:
-                    requests.get(f"{base}/api/settings", timeout=10)
+                if base and not 'localhost' in base and not '127.0.0.1' in base:
+                    try:
+                        requests.get(f"{base}/health", timeout=10)
+                    except Exception:
+                        pass
         except Exception:
             pass
 
@@ -2666,19 +2693,28 @@ async def diagnose_gmail():
 async def _launch_campaign(sender_email, category, file, base_url="", custom_campaign_name="", timezone="Asia/Kolkata", start_hour=10, end_hour=19, working_days="0,1,2,3,4,5"):
     try:
         row = execute_query("SELECT value FROM global_settings WHERE key='tracking_base_url';", fetch="one")
-        if row and row["value"]:
-            base_url = row["value"].strip().rstrip('/')
-        else:
-            tracking_base = os.environ.get("TRACKING_BASE_URL", "").rstrip('/')
-            if tracking_base:
-                base_url = tracking_base
+        db_base = row["value"].strip().rstrip('/') if row and row.get("value") else ""
+        
+        # If DB still has old obsolete Render URL or is empty, auto-update to active live base URL
+        if not db_base or "universal-mailer.onrender.com" in db_base or "pinggy" in db_base or "127.0.0.1" in db_base:
+            if base_url and "localhost" not in base_url and "127.0.0.1" not in base_url:
+                try:
+                    execute_query("INSERT INTO global_settings (key, value) VALUES ('tracking_base_url', %s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value;", [base_url])
+                except Exception:
+                    pass
+        elif db_base:
+            base_url = db_base
+            
+        tracking_base_env = os.environ.get("TRACKING_BASE_URL", "").rstrip('/')
+        if tracking_base_env:
+            base_url = tracking_base_env
     except Exception as e:
-        print(f"Error reading tracking_base_url settings: {e}")
+        pass
     
     # Sanitize: strip any query parameters from the base URL
     if '?' in base_url:
         base_url = base_url.split('?')[0].rstrip('/')
-    print(f"[Campaign] Using tracking base URL: {base_url}")
+    print(f"[Campaign] Active tracking base URL: {base_url}")
         
     campaign_id = f"{sender_email}::{category}::{int(time.time())}"
     with campaigns_lock:
@@ -2706,7 +2742,7 @@ async def _launch_campaign(sender_email, category, file, base_url="", custom_cam
         
         t = threading.Thread(
             target=run_campaign,
-            args=(df.to_dict(orient="list"), email_subject, template_text, "Email", sender_email, sender_name, campaign_id, category, base_url, custom_campaign_name, timezone, start_hour, end_hour, working_days),
+            args=(df, email_subject, template_text, "Email", sender_email, sender_name, campaign_id, category, base_url, custom_campaign_name, timezone, start_hour, end_hour, working_days),
             daemon=True
         )
         t.start()
